@@ -127,7 +127,7 @@
                 rank++;
                 var factors = Rationale.Factors(o.SafetyBreakdown);
                 var marginCls = Rationale.MarginTierClass(o.MarginPercent);
-                <div class="opp-row @(rank <= GeSlots && v.Affordable ? "actionable" : "overflow")">
+                <div class="opp-row @(rank <= GeSlots && v.Affordable ? "actionable" : "overflow")" @key="o.ItemId">
                     <span class="rank">@rank</span>
 
                     <span class="cell-item">
@@ -227,7 +227,9 @@
     private IReadOnlyList<OpportunityView> opportunities => snap?.Opportunities ?? Array.Empty<OpportunityView>();
     private string connectionState = "connecting";
     private DateTimeOffset? lastUpdateLocal;
-    private bool hasSeenHowto;
+    // Start collapsed so returning visitors never see an open→closed flash; we open it only
+    // once we've confirmed (via localStorage) this is a first visit.
+    private bool hasSeenHowto = true;
 
     private PeriodicTimer? _tick;
     private CancellationTokenSource? _tickCts;
@@ -260,6 +262,7 @@
 
         _notifyModule = await JS.InvokeAsync<IJSObjectReference>("import", "./notify.js");
         await _notifyModule.InvokeVoidAsync("requestPermission");
+        await _notifyModule.InvokeVoidAsync("initSafetyCards");
         hasSeenHowto = await _notifyModule.InvokeAsync<bool>("seenHowto");
 
         _hub = new HubConnectionBuilder()
