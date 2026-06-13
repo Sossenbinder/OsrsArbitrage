@@ -1,0 +1,104 @@
+@page "/"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Arbitrage Opportunities</PageTitle>
+
+<h1>Opportunities</h1>
+<nav><a href="/settings">Settings</a></nav>
+<p>Live @opportunities.Count picks. Connection: <strong>@connectionState</strong></p>
+
+<table class="grid">
+    <thead>
+        <tr>
+            <th>Item</th><th>Buy</th><th>Sell</th><th>Net margin</th><th>Margin %</th>
+            <th>Limit</th><th>Cycle profit</th><th>Safety</th><th>Age (s)</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var o in opportunities)
+        {
+            <tr>
+                <td>@o.Name</td>
+                <td>@o.BuyPrice.ToString("N0")</td>
+                <td>@o.SellPrice.ToString("N0")</td>
+                <td>@o.NetMargin.ToString("N0")</td>
+                <td>@o.MarginPercent.ToString("F1")%</td>
+                <td>@o.BuyLimit</td>
+                <td>@o.ExpectedCycleProfit.ToString("N0")</td>
+                <td>@o.SafetyScore.ToString("F0")</td>
+                <td>@o.PriceAgeSeconds</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private HubConnection? _hub;
+    private IJSObjectReference? _notifyModule;
+    private List<Opportunity> opportunities = new();
+    private string connectionState = "connecting";
+
+    // Notification threshold: ping when a fresh high-value pick appears.
+    private const double SafetyThreshold = 70;
+    private const long ProfitThreshold = 200_000;
+    private HashSet<int> _alreadyAlerted = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _notifyModule = await JS.InvokeAsync<IJSObjectReference>("import", "./notify.js");
+        await _notifyModule.InvokeVoidAsync("requestPermission");
+
+        _hub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/hubs/opportunities"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hub.On<List<Opportunity>>("OpportunitiesUpdated", async opps =>
+        {
+            opportunities = opps;
+            await AlertOnNewHighValue(opps);
+            await InvokeAsync(StateHasChanged);
+        });
+
+        _hub.Reconnecting += _ => { connectionState = "reconnecting"; return InvokeAsync(StateHasChanged); };
+        _hub.Reconnected += _ => { connectionState = "connected"; return InvokeAsync(StateHasChanged); };
+
+        await _hub.StartAsync();
+        connectionState = "connected";
+        opportunities = await _hub.InvokeAsync<List<Opportunity>>("GetCurrent");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AlertOnNewHighValue(List<Opportunity> opps)
+    {
+        if (_notifyModule is null) return;
+        foreach (var o in opps)
+        {
+            if (o.SafetyScore >= SafetyThreshold
+                && o.ExpectedCycleProfit >= ProfitThreshold
+                && _alreadyAlerted.Add(o.ItemId))
+            {
+                await _notifyModule.InvokeVoidAsync("notify",
+                    $"Flip: {o.Name}",
+                    $"Profit ~{o.ExpectedCycleProfit:N0} | safety {o.SafetyScore:F0}");
+            }
+        }
+        // Forget items that dropped out so they can re-alert later.
+        _alreadyAlerted.IntersectWith(opps.Select(o => o.ItemId));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub is not null) await _hub.DisposeAsync();
+        if (_notifyModule is not null)
+        {
+            try { await _notifyModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* circuit already gone */ }
+        }
+    }
+}

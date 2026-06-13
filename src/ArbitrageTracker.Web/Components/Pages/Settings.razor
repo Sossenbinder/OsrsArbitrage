@@ -1,0 +1,52 @@
+@page "/settings"
+@rendermode InteractiveServer
+@using ArbitrageTracker.Core.Detection
+@using ArbitrageTracker.Core.Sizing
+@inject ArbitrageTracker.Web.Pipeline.SettingsStore Store
+
+<PageTitle>Settings</PageTitle>
+<h1>Settings</h1>
+<nav><a href="/">← Opportunities</a></nav>
+
+<div class="field"><label>Max unit price (gp)</label>
+    <input type="number" @bind="maxUnitPrice" /></div>
+<div class="field"><label>Min cycle profit (gp)</label>
+    <input type="number" @bind="minCycleProfit" /></div>
+<div class="field"><label>Min margin %</label>
+    <input type="number" step="0.1" @bind="minMarginPercent" /></div>
+<div class="field"><label>Min safety score (0-100)</label>
+    <input type="number" @bind="minSafety" /></div>
+<div class="field"><label>Bankroll (gp)</label>
+    <input type="number" @bind="bankroll" /></div>
+
+<button @onclick="Save">Save</button>
+@if (saved) { <span>Saved ✓</span> }
+
+@code {
+    private long maxUnitPrice, minCycleProfit, minSafety, bankroll;
+    private double minMarginPercent;
+    private bool saved;
+
+    protected override void OnInitialized()
+    {
+        maxUnitPrice = Store.Detection.MaxUnitPrice;
+        minCycleProfit = Store.Detection.MinCycleProfit;
+        minMarginPercent = Store.Detection.MinMarginPercent;
+        minSafety = (long)Store.Detection.MinSafetyScore;
+        bankroll = Store.Sizing.Bankroll;
+    }
+
+    private void Save()
+    {
+        var detection = Store.Detection with
+        {
+            MaxUnitPrice = maxUnitPrice,
+            MinCycleProfit = minCycleProfit,
+            MinMarginPercent = minMarginPercent,
+            MinSafetyScore = minSafety
+        };
+        var sizing = Store.Sizing with { Bankroll = bankroll };
+        Store.Update(detection, sizing);
+        saved = true;
+    }
+}
