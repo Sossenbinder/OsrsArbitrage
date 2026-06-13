@@ -316,3 +316,5 @@ body {
 .cell-vol { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
 .vol-num { font-weight: 600; }
 .vol-sub { font-size: 11px; color: var(--muted-dim); }
+
+.fb-search input { width: 200px; }

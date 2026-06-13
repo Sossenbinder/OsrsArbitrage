@@ -53,7 +53,7 @@
 
     @{
         var shown = Displayed;
-        bool filtered = fMinMargin is not null || fMinSafety is not null || fMinVolume is not null;
+        bool filtered = fMinMargin is not null || fMinSafety is not null || fMinVolume is not null || !string.IsNullOrWhiteSpace(searchText);
         long projProfit = shown.Sum(v => v.ProjectedProfit);
         double avgSafety = shown.Count > 0 ? shown.Average(v => v.Opp.SafetyScore) : 0;
         double bestMargin = shown.Count > 0 ? shown.Max(v => v.Opp.MarginPercent) : 0;
@@ -84,6 +84,8 @@
     </div>
 
     <div class="filterbar">
+        <label class="fb-field fb-search"><input type="search" placeholder="🔍 search item… (e.g. rune)" @bind="searchText" @bind:event="oninput" /></label>
+        <span class="fb-sep"></span>
         <span class="fb-label">Sort</span>
         <div class="seg-btns">
             <button class="@(sortKey==SortKey.Profit?"on":"")" @onclick="() => SetSort(SortKey.Profit)">Profit@(Arrow(SortKey.Profit))</button>
@@ -268,6 +270,7 @@
     private double? fMinMargin;
     private double? fMinSafety;
     private long? fMinVolume;
+    private string? searchText;
 
     private static long Vol(OpportunityView v) => Math.Min(v.Opp.BuyVolume5m, v.Opp.SellVolume5m);
 
@@ -276,6 +279,11 @@
         get
         {
             IEnumerable<OpportunityView> q = opportunities;
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                var term = searchText.Trim();
+                q = q.Where(v => v.Opp.Name.Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
             if (fMinMargin is double mm) q = q.Where(v => v.Opp.MarginPercent >= mm);
             if (fMinSafety is double ms) q = q.Where(v => v.Opp.SafetyScore >= ms);
             if (fMinVolume is long mv) q = q.Where(v => Vol(v) >= mv);
@@ -298,7 +306,7 @@
 
     private string Arrow(SortKey k) => sortKey != k ? "" : (sortDesc ? " ▾" : " ▴");
 
-    private void ClearFilters() { fMinMargin = null; fMinSafety = null; fMinVolume = null; }
+    private void ClearFilters() { fMinMargin = null; fMinSafety = null; fMinVolume = null; searchText = null; }
 
     private HubConnection? _hub;
     private IJSObjectReference? _notifyModule;
