@@ -1,10 +1,8 @@
-using ArbitrageTracker.Core.Domain;
-
 namespace ArbitrageTracker.Web.Pipeline;
 
 public sealed class OpportunityCache
 {
-    private volatile IReadOnlyList<Opportunity> _current = Array.Empty<Opportunity>();
-    public IReadOnlyList<Opportunity> Current => _current;
-    public void Set(IReadOnlyList<Opportunity> opportunities) => _current = opportunities;
+    private volatile IReadOnlyList<OpportunityView> _current = Array.Empty<OpportunityView>();
+    public IReadOnlyList<OpportunityView> Current => _current;
+    public void Set(IReadOnlyList<OpportunityView> opportunities) => _current = opportunities;
 }

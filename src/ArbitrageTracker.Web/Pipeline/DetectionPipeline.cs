@@ -1,5 +1,6 @@
 using ArbitrageTracker.Core.Detection;
 using ArbitrageTracker.Core.Domain;
+using ArbitrageTracker.Core.Sizing;
 using ArbitrageTracker.Core.State;
 using ArbitrageTracker.Data;
 using ArbitrageTracker.Data.Entities;
@@ -16,6 +17,7 @@ public sealed class DetectionPipeline(
     PriceUpdateChannel channel,
     MarketState state,
     OpportunityDetector detector,
+    PositionSizer sizer,
     SettingsStore settings,
     OpportunityCache cache,
     IHubContext<OpportunitiesHub> hub,
@@ -38,7 +40,15 @@ public sealed class DetectionPipeline(
                     }
 
                 var ranked = opps.OrderByDescending(o => o.RankScore).ToList();
-                cache.Set(ranked);
+
+                // Enrich with bankroll-aware sizing for the UI.
+                var sizing = settings.Sizing;
+                var views = ranked.Select(o =>
+                {
+                    var pos = sizer.Size(o, sizing);
+                    return new OpportunityView(o, pos.SuggestedQuantity, pos.CapitalNeeded, pos.ProjectedProfit);
+                }).ToList();
+                cache.Set(views);
 
                 long now = clock.GetUtcNow().ToUnixTimeSeconds();
                 using (var scope = scopeFactory.CreateScope())
@@ -54,7 +64,7 @@ public sealed class DetectionPipeline(
                         }, ct);
                 }
 
-                await hub.Clients.All.SendAsync("OpportunitiesUpdated", ranked, ct);
+                await hub.Clients.All.SendAsync("OpportunitiesUpdated", views, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

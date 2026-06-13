@@ -1,6 +1,7 @@
 @page "/"
 @rendermode InteractiveServer
 @implements IAsyncDisposable
+@using ArbitrageTracker.Web.Pipeline
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -10,23 +11,36 @@
 <nav><a href="/settings">Settings</a></nav>
 <p>Live @opportunities.Count picks. Connection: <strong>@connectionState</strong></p>
 
+@if (opportunities.Count > GeSlots)
+{
+    <p class="warn">⚠ @opportunities.Count picks but only @GeSlots GE slots — the top @GeSlots are shown first; you can't run them all at once.</p>
+}
+
 <table class="grid">
     <thead>
         <tr>
-            <th>Item</th><th>Buy</th><th>Sell</th><th>Net margin</th><th>Margin %</th>
-            <th>Limit</th><th>Cycle profit</th><th>Safety</th><th>Age (s)</th>
+            <th>#</th><th>Item</th><th>Buy</th><th>Sell</th><th>Net margin</th><th>Margin %</th>
+            <th>Limit</th><th>Buy qty</th><th>Capital</th><th>Proj. profit</th>
+            <th>Cycle profit</th><th>Safety</th><th>Age (s)</th>
         </tr>
     </thead>
     <tbody>
-        @foreach (var o in opportunities)
+        @{ int rank = 0; }
+        @foreach (var v in opportunities)
         {
-            <tr>
+            var o = v.Opp;
+            rank++;
+            <tr class="@(rank <= GeSlots ? "actionable" : "overflow")">
+                <td>@rank</td>
                 <td>@o.Name</td>
                 <td>@o.BuyPrice.ToString("N0")</td>
                 <td>@o.SellPrice.ToString("N0")</td>
                 <td>@o.NetMargin.ToString("N0")</td>
                 <td>@o.MarginPercent.ToString("F1")%</td>
-                <td>@o.BuyLimit</td>
+                <td>@o.BuyLimit.ToString("N0")</td>
+                <td>@v.SuggestedQuantity.ToString("N0")</td>
+                <td>@v.CapitalNeeded.ToString("N0")</td>
+                <td>@v.ProjectedProfit.ToString("N0")</td>
                 <td>@o.ExpectedCycleProfit.ToString("N0")</td>
                 <td>@o.SafetyScore.ToString("F0")</td>
                 <td>@o.PriceAgeSeconds</td>
@@ -36,9 +50,11 @@
 </table>
 
 @code {
+    private const int GeSlots = 8;
+
     private HubConnection? _hub;
     private IJSObjectReference? _notifyModule;
-    private List<Opportunity> opportunities = new();
+    private List<OpportunityView> opportunities = new();
     private string connectionState = "connecting";
 
     // Notification threshold: ping when a fresh high-value pick appears.
@@ -58,10 +74,10 @@
             .WithAutomaticReconnect()
             .Build();
 
-        _hub.On<List<Opportunity>>("OpportunitiesUpdated", async opps =>
+        _hub.On<List<OpportunityView>>("OpportunitiesUpdated", async views =>
         {
-            opportunities = opps;
-            await AlertOnNewHighValue(opps);
+            opportunities = views;
+            await AlertOnNewHighValue(views);
             await InvokeAsync(StateHasChanged);
         });
 
@@ -70,15 +86,16 @@
 
         await _hub.StartAsync();
         connectionState = "connected";
-        opportunities = await _hub.InvokeAsync<List<Opportunity>>("GetCurrent");
+        opportunities = await _hub.InvokeAsync<List<OpportunityView>>("GetCurrent");
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task AlertOnNewHighValue(List<Opportunity> opps)
+    private async Task AlertOnNewHighValue(List<OpportunityView> views)
     {
         if (_notifyModule is null) return;
-        foreach (var o in opps)
+        foreach (var v in views)
         {
+            var o = v.Opp;
             if (o.SafetyScore >= SafetyThreshold
                 && o.ExpectedCycleProfit >= ProfitThreshold
                 && _alreadyAlerted.Add(o.ItemId))
@@ -89,7 +106,7 @@
             }
         }
         // Forget items that dropped out so they can re-alert later.
-        _alreadyAlerted.IntersectWith(opps.Select(o => o.ItemId));
+        _alreadyAlerted.IntersectWith(views.Select(v => v.Opp.ItemId));
     }
 
     public async ValueTask DisposeAsync()

@@ -22,9 +22,11 @@ public sealed class OpportunityDetector(TimeProvider timeProvider)
         // Unit price cap (capital exposure).
         if (buy > settings.MaxUnitPrice) return null;
 
-        // Freshness.
+        // Freshness — gate on the OLDER of the two sides. A spread is only real if BOTH the
+        // instant-buy and instant-sell prices traded recently; using the newer side would let
+        // a stale one-sided price masquerade as a huge (unfillable) margin.
         long now = timeProvider.GetUtcNow().ToUnixTimeSeconds();
-        long age = now - Math.Max(snap.Latest.HighTime, snap.Latest.LowTime);
+        long age = now - Math.Min(snap.Latest.HighTime, snap.Latest.LowTime);
         if (age > settings.MaxAgeSeconds) return null;
 
         bool exempt = settings.TaxExemptItemIds.Contains(id);
@@ -33,6 +35,13 @@ public sealed class OpportunityDetector(TimeProvider timeProvider)
         // Margin gating.
         if (flip.NetMargin <= 0) return null;
         if (flip.MarginPercent < settings.MinMarginPercent) return null;
+        if (settings.MaxMarginPercent > 0 && flip.MarginPercent > settings.MaxMarginPercent) return null;
+
+        // Two-sided liquidity gate: both sides must show recent traded volume, or we can get
+        // stuck holding inventory we can't offload.
+        long lowVol = snap.Buckets5m.Count > 0 ? snap.Buckets5m[^1].LowPriceVolume : 0;
+        long highVol = snap.Buckets5m.Count > 0 ? snap.Buckets5m[^1].HighPriceVolume : 0;
+        if (lowVol < settings.MinTwoSidedVolume || highVol < settings.MinTwoSidedVolume) return null;
 
         // Expected per-cycle profit: limited by buy limit and recent buy-side demand.
         long recentDemand = snap.Buckets5m.Count > 0
@@ -41,10 +50,6 @@ public sealed class OpportunityDetector(TimeProvider timeProvider)
         long fillableUnits = Math.Min(snap.Mapping.BuyLimit, Math.Max(0, recentDemand));
         long cycleProfit = fillableUnits * flip.NetMargin;
         if (cycleProfit < settings.MinCycleProfit) return null;
-
-        // Safety score.
-        long lowVol = snap.Buckets5m.Count > 0 ? snap.Buckets5m[^1].LowPriceVolume : 0;
-        long highVol = snap.Buckets5m.Count > 0 ? snap.Buckets5m[^1].HighPriceVolume : 0;
         var avgPrices = ExtractAvgPrices(snap.Buckets5m);
         int profitable = CountProfitableBuckets(snap.Buckets5m, exempt);
         var (safety, breakdown) = SafetyScorer.Score(

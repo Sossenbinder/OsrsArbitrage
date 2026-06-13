@@ -50,9 +50,37 @@ public class OpportunityDetectorTests
     public void Detect_rejectsWhenCycleProfitBelowMinimum()
     {
         var detector = new OpportunityDetector(Clock());
-        // limit 1 → cycle profit 78, below 50_000 floor
-        Assert.Null(detector.Detect(Snapshot(high: 1100, low: 1000, buyLimit: 1, recentBuyVolume: 1),
+        // limit 1 → cycle profit 78, below 50_000 floor (volume kept >= gate so this is the
+        // gate under test).
+        Assert.Null(detector.Detect(Snapshot(high: 1100, low: 1000, buyLimit: 1, recentBuyVolume: 30),
             DetectionSettings.Default));
+    }
+
+    [Fact]
+    public void Detect_rejectsWhenOlderSideIsStale()
+    {
+        var detector = new OpportunityDetector(Clock());
+        // Sell side fresh, buy side traded long ago. max() would pass; min() (older side) rejects.
+        var snap = Snapshot(high: 1100, low: 1000, highTime: 999_950, lowTime: 990_000);
+        Assert.Null(detector.Detect(snap, DetectionSettings.Default));
+    }
+
+    [Fact]
+    public void Detect_rejectsThinTwoSidedVolume()
+    {
+        var detector = new OpportunityDetector(Clock());
+        // Buy-side volume below the 20-unit gate → one-sided, can't exit cleanly.
+        Assert.Null(detector.Detect(Snapshot(high: 1100, low: 1000, recentBuyVolume: 5),
+            DetectionSettings.Default));
+    }
+
+    [Fact]
+    public void Detect_rejectsImplausiblyHighMargin()
+    {
+        var detector = new OpportunityDetector(Clock());
+        // buy 100, sell 43_739 → ~427x margin: stale/illiquid bad data, not real arbitrage.
+        var snap = Snapshot(high: 43_739, low: 100, buyLimit: 1000, recentBuyVolume: 1000);
+        Assert.Null(detector.Detect(snap, DetectionSettings.Default));
     }
 
     [Fact]
