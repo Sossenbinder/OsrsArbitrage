@@ -50,10 +50,10 @@ public class OpportunityDetectorTests
     public void Detect_rejectsWhenCycleProfitBelowMinimum()
     {
         var detector = new OpportunityDetector(Clock());
-        // limit 1 → cycle profit 78, below 50_000 floor (volume kept >= gate so this is the
-        // gate under test).
-        Assert.Null(detector.Detect(Snapshot(high: 1100, low: 1000, buyLimit: 1, recentBuyVolume: 30),
-            DetectionSettings.Default));
+        // limit 1 → cycle profit 78, below an explicit 50_000 floor (the gate mechanism still works
+        // when a threshold is supplied; it just defaults to off now).
+        var settings = DetectionSettings.Default with { MinCycleProfit = 50_000 };
+        Assert.Null(detector.Detect(Snapshot(high: 1100, low: 1000, buyLimit: 1, recentBuyVolume: 30), settings));
     }
 
     [Fact]
@@ -66,21 +66,24 @@ public class OpportunityDetectorTests
     }
 
     [Fact]
-    public void Detect_rejectsThinTwoSidedVolume()
+    public void Detect_rejectsOneSidedMarketByDefault()
     {
         var detector = new OpportunityDetector(Clock());
-        // Buy-side volume below the 20-unit gate → one-sided, can't exit cleanly.
-        Assert.Null(detector.Detect(Snapshot(high: 1100, low: 1000, recentBuyVolume: 5),
+        // No buy-side volume at all → not genuinely two-sided; rejected by the validity gate even
+        // with all preference floors off.
+        Assert.Null(detector.Detect(Snapshot(high: 1100, low: 1000, recentBuyVolume: 0),
             DetectionSettings.Default));
     }
 
     [Fact]
-    public void Detect_rejectsThinMarginBelowFloor()
+    public void Detect_marginFloorIsOffByDefaultButEnforcedWhenSet()
     {
         var detector = new OpportunityDetector(Clock());
-        // buy 1000, sell 1030 → tax 20, net 10 = 1.0% margin: below the 2% slippage-cushion floor.
-        // High safety must NOT rescue a razor-thin margin.
-        Assert.Null(detector.Detect(Snapshot(high: 1030, low: 1000), DetectionSettings.Default));
+        // buy 1000, sell 1030 → 1.0% margin. Allowed by default (no floor)…
+        Assert.NotNull(detector.Detect(Snapshot(high: 1030, low: 1000), DetectionSettings.Default));
+        // …but rejected when the user applies a 2% floor.
+        var settings = DetectionSettings.Default with { MinMarginPercent = 2.0 };
+        Assert.Null(detector.Detect(Snapshot(high: 1030, low: 1000), settings));
     }
 
     [Fact]

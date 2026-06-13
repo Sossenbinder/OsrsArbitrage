@@ -288,22 +288,50 @@ body {
 .empty-none p { margin: 6px 0 0; max-width: 620px; }
 
 /* ---- filter / sort bar ---- */
-.filterbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px;
-  padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.filterbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 16px;
+  padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.fb-group { display: inline-flex; align-items: center; gap: 8px; flex: none; }
 .fb-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-dim); font-weight: 600; }
-.fb-sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 4px; }
-.seg-btns { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+
+/* search */
+.fb-search-group { flex: 0 1 260px; min-width: 180px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0 10px; gap: 7px; }
+.fb-search-group:focus-within { border-color: var(--blue); }
+.fb-ico { color: var(--muted-dim); font-size: 12px; }
+.fb-search-input { flex: 1; min-width: 0; background: transparent; border: none; color: var(--text);
+  padding: 7px 0; font-size: 13px; }
+.fb-search-input:focus { outline: none; }
+
+/* segmented sort control */
+.seg-btns { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex: none; }
 .seg-btns button { background: var(--surface-2); color: var(--muted); border: none; padding: 6px 12px;
-  font-size: 12.5px; font-weight: 600; cursor: pointer; border-right: 1px solid var(--border); }
+  font-size: 12.5px; font-weight: 600; cursor: pointer; border-right: 1px solid var(--border); white-space: nowrap; }
 .seg-btns button:last-child { border-right: none; }
 .seg-btns button:hover { background: var(--surface-3); color: var(--text); }
 .seg-btns button.on { background: var(--blue); color: #04223f; }
+
+/* filter pills — each is self-contained so the bar never breaks mid-control */
+.fb-filters { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.fb-num { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; cursor: text;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px;
+  font-size: 12px; color: var(--muted); }
+.fb-num:focus-within { border-color: var(--blue); }
+.fb-num .op { color: var(--muted-dim); font-weight: 600; }
+.fb-num .unit { color: var(--muted-dim); }
+.fb-num input { width: 46px; background: transparent; border: none; color: var(--text);
+  font-variant-numeric: tabular-nums; font-size: 12.5px; padding: 0; }
+.fb-num input:focus { outline: none; }
+.fb-num input::-webkit-outer-spin-button, .fb-num input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.fb-num input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+
+/* legacy inline field (bankroll control still uses .fb-field) */
 .fb-field { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
 .fb-field input { width: 74px; background: var(--bg); border: 1px solid var(--border); color: var(--text);
   border-radius: 7px; padding: 5px 8px; font-variant-numeric: tabular-nums; }
 .fb-field input:focus { outline: none; border-color: var(--blue); }
-.fb-clear { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 7px;
-  padding: 5px 10px; font-size: 12px; cursor: pointer; }
+
+.fb-clear { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 8px;
+  padding: 5px 11px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .fb-clear:hover { color: var(--red); border-color: var(--red); }
 .fb-clear.inline { padding: 2px 8px; margin-left: 4px; }
 
@@ -318,3 +346,9 @@ body {
 .vol-sub { font-size: 11px; color: var(--muted-dim); }
 
 .fb-search input { width: 200px; }
+
+/* inline bankroll control */
+.bankroll-field { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.bankroll-field input { width: 130px; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: 7px; padding: 6px 9px; font-variant-numeric: tabular-nums; margin-left: 4px; }
+.bankroll-field input:focus { outline: none; border-color: var(--blue); }

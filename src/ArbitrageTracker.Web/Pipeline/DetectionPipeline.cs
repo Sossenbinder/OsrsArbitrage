@@ -1,6 +1,5 @@
 using ArbitrageTracker.Core.Detection;
 using ArbitrageTracker.Core.Domain;
-using ArbitrageTracker.Core.Sizing;
 using ArbitrageTracker.Core.State;
 using ArbitrageTracker.Data;
 using ArbitrageTracker.Data.Entities;
@@ -17,9 +16,7 @@ public sealed class DetectionPipeline(
     PriceUpdateChannel channel,
     MarketState state,
     OpportunityDetector detector,
-    PositionSizer sizer,
     FeedHealth feedHealth,
-    SettingsStore settings,
     OpportunityCache cache,
     IHubContext<OpportunitiesHub> hub,
     IServiceScopeFactory scopeFactory,
@@ -32,34 +29,22 @@ public sealed class DetectionPipeline(
         {
             try
             {
+                // Detection is permissive (validity gates only); the user filters in the UI.
                 var opps = new List<Opportunity>();
                 foreach (int id in state.KnownItemIds)
                     if (state.TryGetSnapshot(id, out var snap) && snap is not null)
                     {
-                        var opp = detector.Detect(snap, settings.Detection);
+                        var opp = detector.Detect(snap, DetectionSettings.Default);
                         if (opp is not null) opps.Add(opp);
                     }
 
                 var ranked = opps.OrderByDescending(o => o.RankScore).ToList();
                 long now = clock.GetUtcNow().ToUnixTimeSeconds();
 
-                // Enrich with bankroll-aware sizing + fill realism for the UI.
-                var sizing = settings.Sizing;
-                var views = ranked.Select(o =>
-                {
-                    var pos = sizer.Size(o, sizing);
-                    // Est. hours to fill the suggested quantity at the recent buy-side throughput
-                    // (5m volume × 12 ≈ per-hour). You compete with other buyers, so treat as a
-                    // floor, not a promise.
-                    double perHour = Math.Max(1, o.BuyVolume5m * 12.0);
-                    double fillHours = pos.SuggestedQuantity / perHour;
-                    return new OpportunityView(o, pos.SuggestedQuantity, pos.CapitalNeeded,
-                        pos.ProjectedProfit, fillHours, pos.SuggestedQuantity > 0);
-                }).ToList();
-
                 long feedAge = now - feedHealth.LastLatestSuccessUnix;
                 bool healthy = feedHealth.ConsecutiveFailures == 0 && feedAge <= 180;
-                cache.Set(new DashboardSnapshot(now, feedAge, healthy, feedHealth.LastError, views));
+                cache.Set(new DashboardSnapshot(now, feedAge, healthy, feedHealth.LastError, ranked));
+
                 using (var scope = scopeFactory.CreateScope())
                 {
                     var repo = scope.ServiceProvider.GetRequiredService<SnapshotRepository>();

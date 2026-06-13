@@ -43,6 +43,15 @@ export function initSafetyCards() {
   });
 }
 
+// Per-device persistence of sort/filter/bankroll preferences.
+export function savePrefs(p) {
+  try { localStorage.setItem("arbPrefs", JSON.stringify(p)); } catch { /* storage blocked */ }
+}
+export function loadPrefs() {
+  try { const s = localStorage.getItem("arbPrefs"); return s ? JSON.parse(s) : null; }
+  catch { return null; }
+}
+
 // Returns whether the "how to use" panel has been seen before, then marks it seen.
 // First-time visitors get it expanded; afterwards it stays collapsed.
 export function seenHowto() {

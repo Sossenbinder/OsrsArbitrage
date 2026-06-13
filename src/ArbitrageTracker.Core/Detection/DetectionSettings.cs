@@ -1,32 +1,35 @@
 namespace ArbitrageTracker.Core.Detection;
 
+/// <summary>
+/// Detection is permissive by default: it surfaces every <em>valid</em> opportunity and lets the
+/// user filter in the UI. The only defaults that bite are <b>validity</b> gates, not preferences —
+/// stale prices, post-tax losses, one-sided markets and implausible (glitch) margins are still
+/// rejected because those aren't opportunities at all. Preference thresholds (min profit, min
+/// safety, min margin, price cap) default to "off" and live as table filters instead.
+/// </summary>
 public sealed record DetectionSettings
 {
-    public long MaxUnitPrice { get; init; } = 1_000_000;
-    public long MinCycleProfit { get; init; } = 50_000;
+    // --- preference thresholds: off by default (the user filters in the table) ---
+    public long MaxUnitPrice { get; init; } = long.MaxValue;
+    public long MinCycleProfit { get; init; } = 0;
+    public double MinMarginPercent { get; init; } = 0.0;
+    public double MinSafetyScore { get; init; } = 0.0;
 
-    /// <summary>
-    /// Minimum net (after-tax) margin as a % of buy price. This is the trader's *cushion*: the
-    /// net margin is how far the sell price can drift down before the flip breaks even. Below ~2%
-    /// a single tick of slippage or a small adverse move turns the flip into a loss, so we default
-    /// conservatively. A high safety score does NOT make a razor-thin margin safe.
-    /// </summary>
-    public double MinMarginPercent { get; init; } = 2.0;
-    public double MinSafetyScore { get; init; } = 50.0;
+    // --- validity gates: keep, these prevent garbage/loss-making rows ---
+
+    /// <summary>Both sides must have traded within this window, or the spread is stale (wrong), not live.</summary>
     public long MaxAgeSeconds { get; init; } = 1800;
 
     /// <summary>
-    /// Reject "too good to be true" spreads. A real liquid flip rarely exceeds a low double-digit
-    /// margin; an extreme margin almost always means one side's price is stale/illiquid bad data.
-    /// 0 disables the cap.
+    /// Reject implausible "too good to be true" margins as almost-certain bad data (a real liquid
+    /// flip never clears triple digits). This is a garbage filter, not a preference — a genuine
+    /// fresh spike well below this still shows. 0 disables it.
     /// </summary>
-    public double MaxMarginPercent { get; init; } = 20.0;
+    public double MaxMarginPercent { get; init; } = 100.0;
 
-    /// <summary>
-    /// Minimum recent traded volume required on BOTH the buy and sell side (last 5m bucket).
-    /// Guards against one-sided markets where you can buy but not cleanly sell (or vice versa).
-    /// </summary>
-    public long MinTwoSidedVolume { get; init; } = 20;
+    /// <summary>Both sides must show at least this much recent volume — i.e. the market is genuinely two-sided.</summary>
+    public long MinTwoSidedVolume { get; init; } = 1;
+
     public IReadOnlySet<int> AllowList { get; init; } = new HashSet<int>();
     public IReadOnlySet<int> DenyList { get; init; } = new HashSet<int>();
     public IReadOnlySet<int> TaxExemptItemIds { get; init; } = new HashSet<int>();

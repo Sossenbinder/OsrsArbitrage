@@ -2,9 +2,10 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @using ArbitrageTracker.Web.Pipeline
+@using ArbitrageTracker.Core.Domain
+@using ArbitrageTracker.Core.Sizing
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@inject SettingsStore Settings
 
 <PageTitle>Arbitrage · OSRS GE</PageTitle>
 
@@ -42,9 +43,9 @@
         <summary>How to use this — read before you trade</summary>
         <ol>
             <li>This tool <strong>finds price gaps; it does not trade for you.</strong> You place every offer yourself in-game.</li>
-            <li><strong>Set your bankroll</strong> in <a href="/settings">Settings</a> so the suggested quantities match the cash you actually have (currently sized for <strong>@Rationale.Gp(Settings.Sizing.Bankroll)</strong>).</li>
-            <li>For a pick: place a <strong>BUY offer at the Buy price</strong> for the suggested quantity.</li>
-            <li>When it fills, place a <strong>SELL offer at the Sell price</strong>. The GE takes a <strong>2% tax</strong> on the sale — every margin here is already after tax.</li>
+            <li><strong>Set your bankroll</strong> (top-right of the toolbar) so the suggested quantities match the cash you actually have.</li>
+            <li>Everything is shown by default — <strong>no hidden floors.</strong> Use the <strong>sort and filter bar</strong> to narrow to what you want (e.g. min safety, min margin); your choices are remembered on this device.</li>
+            <li>For a pick: place a <strong>BUY offer at the Buy price</strong> for the suggested quantity. When it fills, place a <strong>SELL offer at the Sell price</strong>. The GE takes a <strong>2% tax</strong> on the sale — every margin here is already after tax.</li>
             <li>The <strong>margin is your cushion</strong>: if the sell side won't fill and you must lower your price, that's how far you can drop before you start losing. Thin margins (under ~3%) leave almost no room — don't chase.</li>
             <li>Respect the <strong>4-hour buy limit</strong> per item, and check the <strong>est. fill time</strong> — a position that won't fill the same day exposes you to the market moving.</li>
             <li><strong>Start small, and never risk coins you can't afford to lose.</strong> A high safety score means the spread is likely fillable — not that profit is guaranteed.</li>
@@ -52,20 +53,21 @@
     </details>
 
     @{
-        var shown = Displayed;
-        bool filtered = fMinMargin is not null || fMinSafety is not null || fMinVolume is not null || !string.IsNullOrWhiteSpace(searchText);
-        long projProfit = shown.Sum(v => v.ProjectedProfit);
-        double avgSafety = shown.Count > 0 ? shown.Average(v => v.Opp.SafetyScore) : 0;
-        double bestMargin = shown.Count > 0 ? shown.Max(v => v.Opp.MarginPercent) : 0;
+        var ranked = Displayed;
+        var shown = ranked.Take(RenderCap).ToList();
+        bool filtered = fMinMargin is not null || fMinSafety is not null || fMinVolume is not null || fMinProfit is not null || fMaxPrice is not null || !string.IsNullOrWhiteSpace(searchText);
+        long projProfit = ranked.Sum(o => Size(o).ProjectedProfit);
+        double avgSafety = ranked.Count > 0 ? ranked.Average(o => o.SafetyScore) : 0;
+        double bestMargin = ranked.Count > 0 ? ranked.Max(o => o.MarginPercent) : 0;
     }
 
     <section class="stats">
         <div class="stat">
-            <span class="tt"><span class="tt-trigger stat-k">Opportunities</span><span class="tt-pop">Picks currently shown after your filters. Each cleared the detection thresholds in Settings.</span></span>
-            <span class="stat-v">@shown.Count<span class="stat-sub">@(filtered ? $"of {opportunities.Count}" : "found")</span></span>
+            <span class="tt"><span class="tt-trigger stat-k">Opportunities</span><span class="tt-pop">Every valid, profitable-after-tax, fresh, two-sided spread right now. No preference floors — narrow with the filters below.</span></span>
+            <span class="stat-v">@ranked.Count<span class="stat-sub">@(filtered ? $"of {opportunities.Count}" : "found")</span></span>
         </div>
         <div class="stat">
-            <span class="tt"><span class="tt-trigger stat-k">Combined profit if filled</span><span class="tt-pop">Sum of the per-position profit (after 2% tax) across <em>all shown</em> picks, if every leg fills. You may not have the bankroll or time to run them all at once — it's an upper bound.</span></span>
+            <span class="tt"><span class="tt-trigger stat-k">Combined profit if filled</span><span class="tt-pop">Sum of the per-position profit (after 2% tax) across all shown picks, if every leg fills. You likely can't run them all at once — it's an upper bound.</span></span>
             <span class="stat-v profit">+@Rationale.Gp(projProfit)</span>
         </div>
         <div class="stat">
@@ -79,29 +81,39 @@
     </section>
 
     <div class="toolbar">
-        <a class="link" href="/settings">⚙ Settings &amp; bankroll</a>
         <span class="muted small">@LastUpdatedText · polling /latest every 60s</span>
+        <label class="fb-field bankroll-field">💰 Bankroll
+            <input type="number" step="1000000" min="0" @bind="bankroll" @bind:event="oninput" @bind:after="SavePrefs" />
+        </label>
     </div>
 
     <div class="filterbar">
-        <label class="fb-field fb-search"><input type="search" placeholder="🔍 search item… (e.g. rune)" @bind="searchText" @bind:event="oninput" /></label>
-        <span class="fb-sep"></span>
-        <span class="fb-label">Sort</span>
-        <div class="seg-btns">
-            <button class="@(sortKey==SortKey.Profit?"on":"")" @onclick="() => SetSort(SortKey.Profit)">Profit@(Arrow(SortKey.Profit))</button>
-            <button class="@(sortKey==SortKey.Margin?"on":"")" @onclick="() => SetSort(SortKey.Margin)">Margin@(Arrow(SortKey.Margin))</button>
-            <button class="@(sortKey==SortKey.Safety?"on":"")" @onclick="() => SetSort(SortKey.Safety)">Safety@(Arrow(SortKey.Safety))</button>
-            <button class="@(sortKey==SortKey.Volume?"on":"")" @onclick="() => SetSort(SortKey.Volume)">Volume@(Arrow(SortKey.Volume))</button>
+        <div class="fb-group fb-search-group">
+            <span class="fb-ico">🔍</span>
+            <input class="fb-search-input" type="search" placeholder="Search item…" @bind="searchText" @bind:event="oninput" @bind:after="SavePrefs" />
         </div>
-        <span class="fb-sep"></span>
-        <span class="fb-label">Min</span>
-        <label class="fb-field">margin <input type="number" step="0.5" min="0" placeholder="%" @bind="fMinMargin" @bind:event="oninput" /></label>
-        <label class="fb-field">safety <input type="number" step="5" min="0" max="100" placeholder="0-100" @bind="fMinSafety" @bind:event="oninput" /></label>
-        <label class="fb-field">volume <input type="number" step="50" min="0" placeholder="/5m" @bind="fMinVolume" @bind:event="oninput" /></label>
-        @if (filtered)
-        {
-            <button class="fb-clear" @onclick="ClearFilters">clear</button>
-        }
+
+        <div class="fb-group">
+            <span class="fb-label">Sort</span>
+            <div class="seg-btns">
+                <button class="@(sortKey==SortKey.Profit?"on":"")" @onclick="() => SetSort(SortKey.Profit)">Best@(Arrow(SortKey.Profit))</button>
+                <button class="@(sortKey==SortKey.Margin?"on":"")" @onclick="() => SetSort(SortKey.Margin)">Margin@(Arrow(SortKey.Margin))</button>
+                <button class="@(sortKey==SortKey.Safety?"on":"")" @onclick="() => SetSort(SortKey.Safety)">Safety@(Arrow(SortKey.Safety))</button>
+                <button class="@(sortKey==SortKey.Volume?"on":"")" @onclick="() => SetSort(SortKey.Volume)">Volume@(Arrow(SortKey.Volume))</button>
+            </div>
+        </div>
+
+        <div class="fb-filters">
+            <label class="fb-num">Margin <span class="op">≥</span> <input type="number" step="0.5" min="0" @bind="fMinMargin" @bind:event="oninput" @bind:after="SavePrefs" /> <span class="unit">%</span></label>
+            <label class="fb-num">Safety <span class="op">≥</span> <input type="number" step="5" min="0" max="100" @bind="fMinSafety" @bind:event="oninput" @bind:after="SavePrefs" /></label>
+            <label class="fb-num">Volume <span class="op">≥</span> <input type="number" step="50" min="0" @bind="fMinVolume" @bind:event="oninput" @bind:after="SavePrefs" /> <span class="unit">/5m</span></label>
+            <label class="fb-num">Profit <span class="op">≥</span> <input type="number" step="1000" min="0" @bind="fMinProfit" @bind:event="oninput" @bind:after="SavePrefs" /> <span class="unit">gp</span></label>
+            <label class="fb-num">Price <span class="op">≤</span> <input type="number" step="100000" min="0" @bind="fMaxPrice" @bind:event="oninput" @bind:after="SavePrefs" /> <span class="unit">gp</span></label>
+            @if (filtered)
+            {
+                <button class="fb-clear" @onclick="ClearFilters">✕ Clear</button>
+            }
+        </div>
     </div>
 
     @if (opportunities.Count == 0 && lastUpdateLocal is null)
@@ -115,12 +127,12 @@
     {
         <div class="empty empty-none">
             <div>
-                <strong>No low-risk opportunities right now.</strong>
-                <p class="muted small">This is normal — clean spreads above your 2% cushion on liquid items come and go through the day. Nothing here is safer than waiting. You can loosen the thresholds in <a class="link" href="/settings">Settings</a> (at more risk) or check back shortly.</p>
+                <strong>No opportunities right now.</strong>
+                <p class="muted small">Nothing currently has a profitable-after-tax, fresh, two-sided spread. This comes and goes through the day — check back shortly.</p>
             </div>
         </div>
     }
-    else if (shown.Count == 0)
+    else if (ranked.Count == 0)
     {
         <div class="empty empty-none">
             <div>
@@ -131,27 +143,33 @@
     }
     else
     {
+        @if (ranked.Count > RenderCap)
+        {
+            <div class="banner">Showing the top <strong>@RenderCap</strong> of @ranked.Count by your current sort — filter to narrow.</div>
+        }
         <div class="opp-grid">
             <div class="opp-head">
                 <span>#</span>
                 <span class="tt"><span class="tt-trigger">Item</span><span class="tt-pop">Tradeable item. Icon and buy limit from the OSRS Wiki / RuneLite item data.</span></span>
                 <span class="tt"><span class="tt-trigger">Spread</span><span class="tt-pop"><b>Buy</b> = instant-sell price (place a buy offer here, untaxed). <b>Sell</b> = instant-buy price (place a sell offer here). The small line shows what you actually <b>keep after the 2% sell tax</b> — that's the number that catches people out.</span></span>
-                <span class="th-sort tt @(sortKey==SortKey.Margin?"sorted":"")" @onclick="() => SetSort(SortKey.Margin)"><span class="tt-trigger">Margin / cushion@(Arrow(SortKey.Margin))</span><span class="tt-pop">Net profit per item after the <b>2% GE tax</b>. This is also your <b>cushion</b> — how far the sell price can fall before you break even. Under ~3% leaves little slippage room. We reject under 2% and over 20% (stale data). Click to sort.</span></span>
+                <span class="th-sort tt @(sortKey==SortKey.Margin?"sorted":"")" @onclick="() => SetSort(SortKey.Margin)"><span class="tt-trigger">Margin / cushion@(Arrow(SortKey.Margin))</span><span class="tt-pop">Net profit per item after the <b>2% GE tax</b>. This is also your <b>cushion</b> — how far the sell price can fall before you break even. Under ~3% leaves little slippage room. Click to sort.</span></span>
                 <span class="tt"><span class="tt-trigger">Position</span><span class="tt-pop">Suggested buy quantity sized so no single position exceeds ~1/8 of your bankroll (capped by the 4-hour buy limit), the coins required, and an estimate of how long that quantity takes to fill at recent volume.</span></span>
-                <span class="th-sort tt @(sortKey==SortKey.Profit?"sorted":"")" @onclick="() => SetSort(SortKey.Profit)"><span class="tt-trigger">Profit if filled@(Arrow(SortKey.Profit))</span><span class="tt-pop"><b>Top</b>: per-position profit if both legs fill (qty × net margin). <b>Below</b>: 4-hour potential, bounded by the buy limit and how much the item actually trades. Click to sort.</span></span>
+                <span class="th-sort tt @(sortKey==SortKey.Profit?"sorted":"")" @onclick="() => SetSort(SortKey.Profit)"><span class="tt-trigger">Profit if filled@(Arrow(SortKey.Profit))</span><span class="tt-pop"><b>Top</b>: per-position profit if both legs fill (qty × net margin). <b>Below</b>: 4-hour potential, bounded by the buy limit and how much the item actually trades. Sorts by overall pick quality (profit × safety).</span></span>
                 <span class="th-sort tt @(sortKey==SortKey.Volume?"sorted":"")" @onclick="() => SetSort(SortKey.Volume)"><span class="tt-trigger">Vol / 5m@(Arrow(SortKey.Volume))</span><span class="tt-pop">Two-sided units traded in the last 5 minutes (the smaller of buy/sell volume) — how much actually changes hands. Higher = easier to fill and exit. Click to sort.</span></span>
                 <span class="th-sort tt @(sortKey==SortKey.Safety?"sorted":"")" @onclick="() => SetSort(SortKey.Safety)"><span class="tt-trigger">Safety@(Arrow(SortKey.Safety))</span><span class="tt-pop">Modeled probability of cleanly buying and selling within the window. Hover any meter for the factors behind it. Click to sort.</span></span>
                 <span class="tt"><span class="tt-trigger">Age</span><span class="tt-pop">Time since the <b>older</b> of the two prices last traded. Both sides must be fresh (≤ 30 min). Older = trust less.</span></span>
             </div>
 
             @{ int rank = 0; }
-            @foreach (var v in shown)
+            @foreach (var o in shown)
             {
-                var o = v.Opp;
                 rank++;
                 var factors = Rationale.Factors(o.SafetyBreakdown);
                 var marginCls = Rationale.MarginTierClass(o.MarginPercent);
-                <div class="opp-row @(v.Affordable ? "" : "overflow")" @key="o.ItemId">
+                var sized = Size(o);
+                bool affordable = sized.SuggestedQuantity > 0;
+                double fillHours = sized.SuggestedQuantity / Math.Max(1, o.BuyVolume5m * 12.0);
+                <div class="opp-row @(affordable ? "" : "overflow")" @key="o.ItemId">
                     <span class="rank">@rank</span>
 
                     <span class="cell-item">
@@ -195,10 +213,10 @@
                     </span>
 
                     <span class="cell-pos">
-                        @if (v.Affordable)
+                        @if (affordable)
                         {
-                            <span class="pos-qty">@v.SuggestedQuantity.ToString("N0") units</span>
-                            <span class="pos-cap">@Rationale.Gp(v.CapitalNeeded) · <span class="tt"><span class="tt-trigger @(Rationale.FillSlow(v.EstFillHours) ? "fill-slow" : "")">fills @Rationale.FillLabel(v.EstFillHours)</span><span class="tt-pop">Rough time to buy @v.SuggestedQuantity.ToString("N0") units at recent volume (you compete with other buyers, so treat it as a floor).@(Rationale.FillSlow(v.EstFillHours) ? " May not complete the same day — the price can move against you while you wait." : "")</span></span></span>
+                            <span class="pos-qty">@sized.SuggestedQuantity.ToString("N0") units</span>
+                            <span class="pos-cap">@Rationale.Gp(sized.CapitalNeeded) · <span class="tt"><span class="tt-trigger @(Rationale.FillSlow(fillHours) ? "fill-slow" : "")">fills @Rationale.FillLabel(fillHours)</span><span class="tt-pop">Rough time to buy @sized.SuggestedQuantity.ToString("N0") units at recent volume (you compete with other buyers, so treat it as a floor).@(Rationale.FillSlow(fillHours) ? " May not complete the same day — the price can move against you while you wait." : "")</span></span></span>
                         }
                         else
                         {
@@ -207,7 +225,7 @@
                     </span>
 
                     <span class="cell-profit">
-                        <span class="p-proj">+@v.ProjectedProfit.ToString("N0")</span>
+                        <span class="p-proj">+@sized.ProjectedProfit.ToString("N0")</span>
                         <span class="p-cycle">4h max @Rationale.Gp(o.ExpectedCycleProfit)</span>
                     </span>
 
@@ -264,54 +282,79 @@
 </div>
 
 @code {
+    private const int RenderCap = 200;
+
     private enum SortKey { Profit, Margin, Safety, Volume }
     private SortKey sortKey = SortKey.Profit;
     private bool sortDesc = true;
     private double? fMinMargin;
     private double? fMinSafety;
     private long? fMinVolume;
+    private long? fMinProfit;
+    private long? fMaxPrice;
     private string? searchText;
+    private long bankroll = 10_000_000;
 
-    private static long Vol(OpportunityView v) => Math.Min(v.Opp.BuyVolume5m, v.Opp.SellVolume5m);
+    private readonly PositionSizer _sizer = new();
+    private SizedPosition Size(Opportunity o) => _sizer.Size(o, new SizingSettings { Bankroll = bankroll });
 
-    private IReadOnlyList<OpportunityView> Displayed
+    private static long Vol(Opportunity o) => Math.Min(o.BuyVolume5m, o.SellVolume5m);
+
+    private IReadOnlyList<Opportunity> Displayed
     {
         get
         {
-            IEnumerable<OpportunityView> q = opportunities;
+            IEnumerable<Opportunity> q = opportunities;
             if (!string.IsNullOrWhiteSpace(searchText))
             {
                 var term = searchText.Trim();
-                q = q.Where(v => v.Opp.Name.Contains(term, StringComparison.OrdinalIgnoreCase));
+                q = q.Where(o => o.Name.Contains(term, StringComparison.OrdinalIgnoreCase));
             }
-            if (fMinMargin is double mm) q = q.Where(v => v.Opp.MarginPercent >= mm);
-            if (fMinSafety is double ms) q = q.Where(v => v.Opp.SafetyScore >= ms);
-            if (fMinVolume is long mv) q = q.Where(v => Vol(v) >= mv);
-            Func<OpportunityView, double> key = sortKey switch
+            if (fMinMargin is double mm) q = q.Where(o => o.MarginPercent >= mm);
+            if (fMinSafety is double ms) q = q.Where(o => o.SafetyScore >= ms);
+            if (fMinVolume is long mv) q = q.Where(o => Vol(o) >= mv);
+            if (fMinProfit is long mp) q = q.Where(o => Size(o).ProjectedProfit >= mp);
+            if (fMaxPrice is long mxp) q = q.Where(o => o.BuyPrice <= mxp);
+            Func<Opportunity, double> key = sortKey switch
             {
-                SortKey.Margin => v => v.Opp.NetMargin,
-                SortKey.Safety => v => v.Opp.SafetyScore,
-                SortKey.Volume => v => Vol(v),
-                _ => v => v.Opp.RankScore,
+                SortKey.Margin => o => o.NetMargin,
+                SortKey.Safety => o => o.SafetyScore,
+                SortKey.Volume => o => Vol(o),
+                _ => o => o.RankScore,
             };
             return (sortDesc ? q.OrderByDescending(key) : q.OrderBy(key)).ToList();
         }
     }
 
-    private void SetSort(SortKey k)
+    private async Task SetSort(SortKey k)
     {
         if (sortKey == k) sortDesc = !sortDesc;
         else { sortKey = k; sortDesc = true; }
+        await SavePrefs();
     }
 
     private string Arrow(SortKey k) => sortKey != k ? "" : (sortDesc ? " ▾" : " ▴");
 
-    private void ClearFilters() { fMinMargin = null; fMinSafety = null; fMinVolume = null; searchText = null; }
+    private async Task ClearFilters()
+    {
+        fMinMargin = null; fMinSafety = null; fMinVolume = null; fMinProfit = null; fMaxPrice = null; searchText = null;
+        await SavePrefs();
+    }
+
+    private sealed record Prefs(string? Sort, bool? Desc, double? MinMargin, double? MinSafety,
+        long? MinVolume, long? MinProfit, long? MaxPrice, string? Search, long? Bankroll);
+
+    private async Task SavePrefs()
+    {
+        if (_notifyModule is null) return;
+        await _notifyModule.InvokeVoidAsync("savePrefs", new Prefs(
+            sortKey.ToString(), sortDesc, fMinMargin, fMinSafety, fMinVolume, fMinProfit, fMaxPrice, searchText, bankroll));
+    }
 
     private HubConnection? _hub;
     private IJSObjectReference? _notifyModule;
     private DashboardSnapshot? snap;
-    private IReadOnlyList<OpportunityView> opportunities => snap?.Opportunities ?? Array.Empty<OpportunityView>();
+    private IReadOnlyList<Opportunity> opportunities => snap?.Opportunities ?? Array.Empty<Opportunity>();
     private string connectionState = "connecting";
     private DateTimeOffset? lastUpdateLocal;
     // Start collapsed so returning visitors never see an open→closed flash; we open it only
@@ -352,6 +395,18 @@
         await _notifyModule.InvokeVoidAsync("initSafetyCards");
         hasSeenHowto = await _notifyModule.InvokeAsync<bool>("seenHowto");
 
+        // Restore saved sort/filter/bankroll preferences (per-device, localStorage).
+        var p = await _notifyModule.InvokeAsync<Prefs?>("loadPrefs");
+        if (p is not null)
+        {
+            if (Enum.TryParse<SortKey>(p.Sort, out var sk)) sortKey = sk;
+            sortDesc = p.Desc ?? sortDesc;
+            fMinMargin = p.MinMargin; fMinSafety = p.MinSafety;
+            fMinVolume = p.MinVolume; fMinProfit = p.MinProfit; fMaxPrice = p.MaxPrice;
+            searchText = p.Search;
+            if (p.Bankroll is long b && b > 0) bankroll = b;
+        }
+
         _hub = new HubConnectionBuilder()
             .WithUrl(Nav.ToAbsoluteUri("/hubs/opportunities"))
             .WithAutomaticReconnect()
@@ -387,13 +442,12 @@
         catch (OperationCanceledException) { }
     }
 
-    private async Task AlertOnNewHighValue(IReadOnlyList<OpportunityView> views)
+    private async Task AlertOnNewHighValue(IReadOnlyList<Opportunity> opps)
     {
         if (_notifyModule is null) return;
-        foreach (var v in views)
+        foreach (var o in opps)
         {
-            var o = v.Opp;
-            if (v.Affordable && o.SafetyScore >= SafetyThreshold
+            if (o.SafetyScore >= SafetyThreshold
                 && o.ExpectedCycleProfit >= ProfitThreshold
                 && _alreadyAlerted.Add(o.ItemId))
             {
@@ -402,7 +456,7 @@
                     $"Profit ~{o.ExpectedCycleProfit:N0} | safety {o.SafetyScore:F0}");
             }
         }
-        _alreadyAlerted.IntersectWith(views.Select(v => v.Opp.ItemId));
+        _alreadyAlerted.IntersectWith(opps.Select(o => o.ItemId));
     }
 
     public async ValueTask DisposeAsync()
