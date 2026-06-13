@@ -1,0 +1,5 @@
+bin/
+obj/
+# Real stack config may hold settings you don't want committed; keep only the example.
+Pulumi.*.yaml
+!Pulumi.dev.yaml.example

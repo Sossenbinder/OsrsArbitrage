@@ -1,0 +1,26 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# Local data & secrets
+**/data/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/.env
+**/.env.*
+
+# Tooling / non-app dirs
+.git/
+.github/
+.vs/
+.idea/
+.vscode/
+infra/
+deploy/
+docs/
+specs/
+tests/
+**/*.md

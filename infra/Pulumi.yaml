@@ -1,0 +1,3 @@
+name: osrs-infra
+runtime: dotnet
+description: Hetzner Cloud infrastructure for the OSRS Arbitrage Tracker

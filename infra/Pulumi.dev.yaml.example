@@ -1,0 +1,8 @@
+# Copy to Pulumi.<stack>.yaml (e.g. Pulumi.dev.yaml), or set via `pulumi config set`.
+# The hcloud token is a SECRET — set it with:  pulumi config set hcloud:token <TOKEN> --secret
+config:
+  osrs-infra:serverType: cax11        # ARM 2 vCPU / 4 GB (~€3.79/mo). Use cx22 for x86.
+  osrs-infra:location: nbg1           # nbg1 | fsn1 | hel1
+  osrs-infra:domain: ""               # e.g. arb.example.com for HTTPS; leave "" for HTTP on the IP
+  osrs-infra:repoUrl: https://github.com/Sossenbinder/OsrsArbitrage.git
+  osrs-infra:sshPublicKey: "ssh-ed25519 AAAA... you@host"   # contents of ~/.ssh/id_ed25519.pub

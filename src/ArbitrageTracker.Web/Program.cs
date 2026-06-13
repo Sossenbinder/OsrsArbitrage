@@ -7,12 +7,23 @@ using ArbitrageTracker.Web.Components;
 using ArbitrageTracker.Web.Hubs;
 using ArbitrageTracker.Web.Pipeline;
 using ArbitrageTracker.Web.Validation;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddSignalR();
+
+// Behind the Caddy reverse proxy (TLS terminated there): trust the forwarded scheme/host so
+// HTTPS redirect, generated links and SignalR see the real https origin. Caddy is the only hop,
+// so we don't restrict known proxies/networks.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownIPNetworks.Clear();
+    o.KnownProxies.Clear();
+});
 
 // Persistence
 builder.Services.AddDbContext<ArbitrageDbContext>(o =>
@@ -47,6 +58,8 @@ builder.Services.AddHostedService<DetectionPipeline>();
 builder.Services.AddHostedService<ProxyOutcomeJob>();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // Ensure the SQLite data directory exists, then apply migrations on startup.
 Directory.CreateDirectory("data");

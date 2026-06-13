@@ -1,0 +1,35 @@
+services:
+  app:
+    image: ghcr.io/sossenbinder/osrsarbitrage:latest
+    restart: unless-stopped
+    environment:
+      # Override the Wiki contact in production if you like.
+      Wiki__UserAgent: ${WIKI_USER_AGENT:-ArbitrageTracker/1.0 (personal flipping tool)}
+    volumes:
+      - arbdata:/app/data          # persists the SQLite DB across deploys
+    networks: [web]
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      DOMAIN: ${DOMAIN}            # a domain ⇒ auto-HTTPS; a bare IP ⇒ plain HTTP
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data           # ACME certs (don't lose these)
+      - caddy_config:/config
+    networks: [web]
+
+networks:
+  web:
+
+volumes:
+  arbdata:
+  caddy_data:
+  caddy_config:
