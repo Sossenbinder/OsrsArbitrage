@@ -133,7 +133,7 @@
             <div class="opp-head">
                 <span>#</span>
                 <span class="tt"><span class="tt-trigger">Item</span><span class="tt-pop">Tradeable item. Icon and buy limit from the OSRS Wiki / RuneLite item data.</span></span>
-                <span class="tt"><span class="tt-trigger">Spread</span><span class="tt-pop"><b>Buy</b> = instant-sell price (place a buy offer here). <b>Sell</b> = instant-buy price (place a sell offer here). These are last completed trades, so the live game price may differ.</span></span>
+                <span class="tt"><span class="tt-trigger">Spread</span><span class="tt-pop"><b>Buy</b> = instant-sell price (place a buy offer here, untaxed). <b>Sell</b> = instant-buy price (place a sell offer here). The small line shows what you actually <b>keep after the 2% sell tax</b> — that's the number that catches people out.</span></span>
                 <span class="th-sort tt @(sortKey==SortKey.Margin?"sorted":"")" @onclick="() => SetSort(SortKey.Margin)"><span class="tt-trigger">Margin / cushion@(Arrow(SortKey.Margin))</span><span class="tt-pop">Net profit per item after the <b>2% GE tax</b>. This is also your <b>cushion</b> — how far the sell price can fall before you break even. Under ~3% leaves little slippage room. We reject under 2% and over 20% (stale data). Click to sort.</span></span>
                 <span class="tt"><span class="tt-trigger">Position</span><span class="tt-pop">Suggested buy quantity sized so no single position exceeds ~1/8 of your bankroll (capped by the 4-hour buy limit), the coins required, and an estimate of how long that quantity takes to fill at recent volume.</span></span>
                 <span class="th-sort tt @(sortKey==SortKey.Profit?"sorted":"")" @onclick="() => SetSort(SortKey.Profit)"><span class="tt-trigger">Profit if filled@(Arrow(SortKey.Profit))</span><span class="tt-pop"><b>Top</b>: per-position profit if both legs fill (qty × net margin). <b>Below</b>: 4-hour potential, bounded by the buy limit and how much the item actually trades. Click to sort.</span></span>
@@ -168,9 +168,19 @@
                     </span>
 
                     <span class="cell-spread">
-                        <span class="buy">@o.BuyPrice.ToString("N0")</span>
-                        <span class="arrow">→</span>
-                        <span class="sell">@o.SellPrice.ToString("N0")</span>
+                        <span class="spread-row">
+                            <span class="buy">@o.BuyPrice.ToString("N0")</span>
+                            <span class="arrow">→</span>
+                            <span class="sell">@o.SellPrice.ToString("N0")</span>
+                        </span>
+                        @if (o.Tax > 0)
+                        {
+                            <span class="tt"><span class="tt-trigger spread-tax">↳ keep @((o.SellPrice - o.Tax).ToString("N0")) after tax</span><span class="tt-pop">You buy at <b>@o.BuyPrice.ToString("N0")</b> (no tax on buying). You list the sell at <b>@o.SellPrice.ToString("N0")</b>, but the GE skims a 2% tax (−@o.Tax.ToString("N0")) when it sells, so you actually pocket <b>@((o.SellPrice - o.Tax).ToString("N0"))</b>. Profit = @((o.SellPrice - o.Tax).ToString("N0")) − @o.BuyPrice.ToString("N0") = <b>+@o.NetMargin.ToString("N0")</b>.</span></span>
+                        }
+                        else
+                        {
+                            <span class="tt"><span class="tt-trigger spread-tax taxfree">tax-free</span><span class="tt-pop">Items selling under 50 gp pay no GE tax, so you keep the full @o.SellPrice.ToString("N0"). Profit = @o.SellPrice.ToString("N0") − @o.BuyPrice.ToString("N0") = <b>+@o.NetMargin.ToString("N0")</b>.</span></span>
+                        }
                     </span>
 
                     <span class="cell-margin tt">

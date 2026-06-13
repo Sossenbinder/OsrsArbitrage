@@ -132,10 +132,13 @@ body {
 .item-sub { font-size: 11.5px; color: var(--muted-dim); border-bottom: 1px dotted var(--muted-dim); }
 
 /* spread */
-.cell-spread { font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 7px; }
+.cell-spread { font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: 1px; }
+.spread-row { display: flex; align-items: center; gap: 7px; }
 .cell-spread .buy { color: var(--muted); }
 .cell-spread .arrow { color: var(--muted-dim); }
 .cell-spread .sell { color: var(--text); font-weight: 600; }
+.spread-tax { font-size: 11px; color: var(--muted-dim); border-bottom: 1px dotted var(--muted-dim); cursor: help; }
+.spread-tax.taxfree { color: var(--green); border-bottom-color: rgba(63,185,80,.4); }
 
 /* margin */
 .cell-margin { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
