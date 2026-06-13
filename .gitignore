@@ -40,3 +40,6 @@ data/
 appsettings.*.local.json
 *.secrets.json
 secrets/
+
+# direnv (may hold a Pulumi passphrase) — never commit
+.envrc
