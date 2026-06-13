@@ -64,5 +64,6 @@ In the GitHub repo → **Settings → Secrets and variables → Actions**:
 ## Notes
 - The DB volume survives container/image updates but **not** a server destroy. It's mostly
   re-derivable (state rebuilds from the API on boot), so snapshots are optional.
-- `cax11` (ARM) is the cheapest tier and ample; the image is built multi-arch so `cx22` (x86)
-  works too — just set `osrs-infra:serverType`.
+- Default server is `cx33` (x86). The image is built multi-arch (amd64 + arm64), so you can
+  switch to a cheaper ARM box (`cax11`/`cax21`) anytime via `osrs-infra:serverType` — no rebuild
+  needed. The CX line is EU-only (nbg1/fsn1/hel1).

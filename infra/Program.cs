@@ -5,7 +5,7 @@ using Hcloud = Pulumi.HCloud;
 return await Deployment.RunAsync(() =>
 {
     var cfg = new Config();
-    var serverType = cfg.Get("serverType") ?? "cax11";          // ARM, 2 vCPU / 4 GB — plenty
+    var serverType = cfg.Get("serverType") ?? "cx33";           // x86 shared vCPU; ample headroom
     var location   = cfg.Get("location")   ?? "nbg1";           // Nuremberg
     var image      = cfg.Get("image")      ?? "ubuntu-24.04";
     var domain     = cfg.Get("domain")     ?? "";               // empty ⇒ plain HTTP on the IP
