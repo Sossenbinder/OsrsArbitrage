@@ -36,14 +36,3 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
-/* Arbitrage opportunities grid */
-table.grid { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
-table.grid th, table.grid td { border: 1px solid #ddd; padding: 4px 8px; text-align: right; }
-table.grid th:nth-child(2), table.grid td:nth-child(2) { text-align: left; }
-table.grid thead th { background: #f4f4f4; position: sticky; top: 0; }
-table.grid tr.actionable td { background: #f3fbf3; }
-table.grid tr.overflow td { background: #fafafa; color: #888; }
-.warn { background: #fff6e0; border: 1px solid #f0c869; padding: 6px 10px; border-radius: 4px; }
-.field { margin: 6px 0; display: flex; gap: 8px; align-items: center; }
-.field label { width: 200px; display: inline-block; }
-nav { margin: 4px 0 12px; }

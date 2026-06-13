@@ -5,49 +5,172 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<PageTitle>Arbitrage Opportunities</PageTitle>
+<PageTitle>Arbitrage · OSRS GE</PageTitle>
 
-<h1>Opportunities</h1>
-<nav><a href="/settings">Settings</a></nav>
-<p>Live @opportunities.Count picks. Connection: <strong>@connectionState</strong></p>
+<div class="dash">
 
-@if (opportunities.Count > GeSlots)
-{
-    <p class="warn">⚠ @opportunities.Count picks but only @GeSlots GE slots — the top @GeSlots are shown first; you can't run them all at once.</p>
-}
+    <header class="dash-head">
+        <div class="brand">
+            <span class="brand-mark">⚖</span>
+            <div>
+                <h1>Grand Exchange Arbitrage</h1>
+                <p class="subtitle">
+                    Live spreads from <strong>completed RuneLite trades</strong> via the OSRS Wiki.
+                    Safety is a modeled <span class="tt"><span class="tt-trigger u">clean-fill probability</span><span class="tt-pop">The estimated chance you can buy <em>and</em> sell cleanly within the window. It is a risk estimate, not a guarantee — the displayed spread is never locked in.</span></span>, not a guarantee.
+                </p>
+            </div>
+        </div>
+        <div class="status">
+            <span class="pill @(connectionState == "connected" ? "pill-live" : "pill-down")">
+                <span class="dot"></span>@connectionState.ToUpperInvariant()
+            </span>
+            @if (lastUpdate is not null)
+            {
+                <span class="muted">refreshed @lastUpdate</span>
+            }
+        </div>
+    </header>
 
-<table class="grid">
-    <thead>
-        <tr>
-            <th>#</th><th>Item</th><th>Buy</th><th>Sell</th><th>Net margin</th><th>Margin %</th>
-            <th>Limit</th><th>Buy qty</th><th>Capital</th><th>Proj. profit</th>
-            <th>Cycle profit</th><th>Safety</th><th>Age (s)</th>
-        </tr>
-    </thead>
-    <tbody>
-        @{ int rank = 0; }
-        @foreach (var v in opportunities)
-        {
-            var o = v.Opp;
-            rank++;
-            <tr class="@(rank <= GeSlots ? "actionable" : "overflow")">
-                <td>@rank</td>
-                <td>@o.Name</td>
-                <td>@o.BuyPrice.ToString("N0")</td>
-                <td>@o.SellPrice.ToString("N0")</td>
-                <td>@o.NetMargin.ToString("N0")</td>
-                <td>@o.MarginPercent.ToString("F1")%</td>
-                <td>@o.BuyLimit.ToString("N0")</td>
-                <td>@v.SuggestedQuantity.ToString("N0")</td>
-                <td>@v.CapitalNeeded.ToString("N0")</td>
-                <td>@v.ProjectedProfit.ToString("N0")</td>
-                <td>@o.ExpectedCycleProfit.ToString("N0")</td>
-                <td>@o.SafetyScore.ToString("F0")</td>
-                <td>@o.PriceAgeSeconds</td>
-            </tr>
-        }
-    </tbody>
-</table>
+    @{
+        var top = opportunities.Take(GeSlots).ToList();
+        long capital = top.Sum(v => v.CapitalNeeded);
+        long projProfit = top.Sum(v => v.ProjectedProfit);
+        double avgSafety = top.Count > 0 ? top.Average(v => v.Opp.SafetyScore) : 0;
+    }
+
+    <section class="stats">
+        <div class="stat">
+            <span class="tt"><span class="tt-trigger stat-k">Actionable picks</span><span class="tt-pop">Opportunities that cleared every filter and fit your @GeSlots GE slots. Lower-ranked extras are listed but greyed.</span></span>
+            <span class="stat-v">@Math.Min(opportunities.Count, GeSlots)<span class="stat-sub">/ @opportunities.Count found</span></span>
+        </div>
+        <div class="stat">
+            <span class="tt"><span class="tt-trigger stat-k">Capital to deploy</span><span class="tt-pop">Total coins to buy the suggested quantities across your top @GeSlots slots, sized to your bankroll.</span></span>
+            <span class="stat-v">@Rationale.Gp(capital)</span>
+        </div>
+        <div class="stat">
+            <span class="tt"><span class="tt-trigger stat-k">Projected profit</span><span class="tt-pop">Expected profit after the 2% GE tax across the top @GeSlots slots, at the suggested quantities. One fill cycle.</span></span>
+            <span class="stat-v profit">+@Rationale.Gp(projProfit)</span>
+        </div>
+        <div class="stat">
+            <span class="tt"><span class="tt-trigger stat-k">Avg safety</span><span class="tt-pop">Mean safety score of your top @GeSlots picks. Higher means the spreads are more likely to fill cleanly.</span></span>
+            <span class="stat-v @Rationale.TierClass(avgSafety)">@avgSafety.ToString("F0")</span>
+        </div>
+    </section>
+
+    <div class="toolbar">
+        <a class="link" href="/settings">⚙ Settings</a>
+        <span class="muted small">Polling /latest every 60s · prices are completed-trade aggregates, ± a little</span>
+    </div>
+
+    @if (opportunities.Count > GeSlots)
+    {
+        <div class="banner">
+            <strong>@opportunities.Count picks, @GeSlots slots.</strong>
+            The top @GeSlots (highlighted) are what you can actually run at once — they're ranked by projected profit × safety.
+        </div>
+    }
+
+    @if (opportunities.Count == 0)
+    {
+        <div class="empty">
+            <span class="spin"></span>
+            Waiting for the first full scan… needs one price poll and one 5-minute volume bucket (≈ up to a minute on a cold start).
+        </div>
+    }
+    else
+    {
+        <div class="opp-grid">
+            <div class="opp-head">
+                <span>#</span>
+                <span class="tt"><span class="tt-trigger">Item</span><span class="tt-pop">Tradeable item. Icon and buy limit from the OSRS Wiki / RuneLite item data.</span></span>
+                <span class="tt"><span class="tt-trigger">Spread</span><span class="tt-pop"><b>Buy</b> = the instant-sell price (you place a buy offer here). <b>Sell</b> = the instant-buy price (you place a sell offer here). The gap is the raw spread before tax.</span></span>
+                <span class="tt"><span class="tt-trigger">Margin</span><span class="tt-pop">Net profit per item after the <b>2% GE sell tax</b> (capped at 5M). We reject anything above 20% — extreme margins are almost always one stale price, not real arbitrage.</span></span>
+                <span class="tt"><span class="tt-trigger">Position</span><span class="tt-pop">Suggested buy quantity for <b>one GE slot</b>, sized to your per-slot budget (bankroll ÷ 8) and capped by the 4-hour buy limit, with the coins required.</span></span>
+                <span class="tt"><span class="tt-trigger">Profit</span><span class="tt-pop"><b>Top</b>: projected profit for this slot (qty × net margin). <b>Below</b>: cycle profit if you fill the entire buy limit this 4-hour window.</span></span>
+                <span class="tt"><span class="tt-trigger">Safety</span><span class="tt-pop">Modeled probability of cleanly buying and selling within the window. Hover any meter to see the four factors behind the score.</span></span>
+                <span class="tt"><span class="tt-trigger">Age</span><span class="tt-pop">Time since the <b>older</b> of the two prices last traded. We require both sides fresh (≤ 30 min) so the spread is real and live.</span></span>
+            </div>
+
+            @{ int rank = 0; }
+            @foreach (var v in opportunities)
+            {
+                var o = v.Opp;
+                rank++;
+                var factors = Rationale.Factors(o.SafetyBreakdown);
+                <div class="opp-row @(rank <= GeSlots ? "actionable" : "overflow")">
+                    <span class="rank">@rank</span>
+
+                    <span class="cell-item">
+                        <img class="icon" src="https://static.runelite.net/cache/item/icon/@(o.ItemId).png"
+                             alt="" loading="lazy" onerror="this.style.visibility='hidden'" />
+                        <span class="item-text">
+                            <span class="item-name">@o.Name</span>
+                            <span class="tt"><span class="tt-trigger item-sub">limit @o.BuyLimit.ToString("N0") / 4h</span><span class="tt-pop">You can buy at most @o.BuyLimit.ToString("N0") of this item every 4 hours. This caps how much one flip can earn.</span></span>
+                        </span>
+                    </span>
+
+                    <span class="cell-spread">
+                        <span class="buy">@o.BuyPrice.ToString("N0")</span>
+                        <span class="arrow">→</span>
+                        <span class="sell">@o.SellPrice.ToString("N0")</span>
+                    </span>
+
+                    <span class="cell-margin">
+                        <span class="margin-net">+@o.NetMargin.ToString("N0")</span>
+                        <span class="margin-pct">@o.MarginPercent.ToString("F1")%</span>
+                    </span>
+
+                    <span class="cell-pos">
+                        <span class="pos-qty">@v.SuggestedQuantity.ToString("N0") units</span>
+                        <span class="pos-cap">@Rationale.Gp(v.CapitalNeeded)</span>
+                    </span>
+
+                    <span class="cell-profit">
+                        <span class="p-proj">+@v.ProjectedProfit.ToString("N0")</span>
+                        <span class="p-cycle">cycle @Rationale.Gp(o.ExpectedCycleProfit)</span>
+                    </span>
+
+                    <span class="cell-safety tt">
+                        <span class="meter">
+                            <span class="meter-bar"><span class="meter-fill @Rationale.TierClass(o.SafetyScore)" style="width:@o.SafetyScore.ToString("F0")%"></span></span>
+                            <span class="meter-num">@o.SafetyScore.ToString("F0")</span>
+                        </span>
+                        <span class="seg">
+                            @foreach (var f in factors)
+                            {
+                                <span class="seg-bit s-@f.Status" style="flex:@f.WeightPct"></span>
+                            }
+                        </span>
+
+                        <span class="tt-pop card">
+                            <span class="card-head">
+                                <span class="badge @Rationale.TierClass(o.SafetyScore)">@Rationale.Tier(o.SafetyScore)</span>
+                                <span class="card-score">@o.SafetyScore.ToString("F0")<span class="card-score-max">/100</span></span>
+                            </span>
+                            <span class="card-summary">@Rationale.Summary(o)</span>
+                            @foreach (var f in factors)
+                            {
+                                <span class="factor">
+                                    <span class="factor-top">
+                                        <span class="factor-label">@f.Label</span>
+                                        <span class="factor-meta">@f.Value.ToString("P0") · @f.WeightPct% weight</span>
+                                    </span>
+                                    <span class="factor-bar"><span class="factor-fill s-@f.Status" style="width:@((f.Value*100).ToString("F0"))%"></span></span>
+                                    <span class="factor-why">@f.Explanation</span>
+                                </span>
+                            }
+                            <span class="card-foot">Score = 0.40·liquidity + 0.25·stability + 0.20·persistence + 0.15·freshness</span>
+                        </span>
+                    </span>
+
+                    <span class="cell-age">
+                        <span class="tt"><span class="tt-trigger age-pill @Rationale.FreshnessClass(o.PriceAgeSeconds)">@Rationale.Age(o.PriceAgeSeconds)</span><span class="tt-pop">Older side last traded @o.PriceAgeSeconds s ago. Both buy and sell prices must be ≤ 30 min old to qualify.</span></span>
+                    </span>
+                </div>
+            }
+        </div>
+    }
+</div>
 
 @code {
     private const int GeSlots = 8;
@@ -56,8 +179,8 @@
     private IJSObjectReference? _notifyModule;
     private List<OpportunityView> opportunities = new();
     private string connectionState = "connecting";
+    private string? lastUpdate;
 
-    // Notification threshold: ping when a fresh high-value pick appears.
     private const double SafetyThreshold = 70;
     private const long ProfitThreshold = 200_000;
     private HashSet<int> _alreadyAlerted = new();
@@ -77,6 +200,7 @@
         _hub.On<List<OpportunityView>>("OpportunitiesUpdated", async views =>
         {
             opportunities = views;
+            lastUpdate = DateTimeOffset.Now.ToString("HH:mm:ss");
             await AlertOnNewHighValue(views);
             await InvokeAsync(StateHasChanged);
         });
@@ -87,6 +211,7 @@
         await _hub.StartAsync();
         connectionState = "connected";
         opportunities = await _hub.InvokeAsync<List<OpportunityView>>("GetCurrent");
+        if (opportunities.Count > 0) lastUpdate = DateTimeOffset.Now.ToString("HH:mm:ss");
         await InvokeAsync(StateHasChanged);
     }
 
@@ -105,7 +230,6 @@
                     $"Profit ~{o.ExpectedCycleProfit:N0} | safety {o.SafetyScore:F0}");
             }
         }
-        // Forget items that dropped out so they can re-alert later.
         _alreadyAlerted.IntersectWith(views.Select(v => v.Opp.ItemId));
     }
 

@@ -4,23 +4,46 @@
 @using ArbitrageTracker.Core.Sizing
 @inject ArbitrageTracker.Web.Pipeline.SettingsStore Store
 
-<PageTitle>Settings</PageTitle>
-<h1>Settings</h1>
-<nav><a href="/">← Opportunities</a></nav>
+<PageTitle>Settings · OSRS GE Arbitrage</PageTitle>
 
-<div class="field"><label>Max unit price (gp)</label>
-    <input type="number" @bind="maxUnitPrice" /></div>
-<div class="field"><label>Min cycle profit (gp)</label>
-    <input type="number" @bind="minCycleProfit" /></div>
-<div class="field"><label>Min margin %</label>
-    <input type="number" step="0.1" @bind="minMarginPercent" /></div>
-<div class="field"><label>Min safety score (0-100)</label>
-    <input type="number" @bind="minSafety" /></div>
-<div class="field"><label>Bankroll (gp)</label>
-    <input type="number" @bind="bankroll" /></div>
+<div class="dash">
+    <header class="dash-head">
+        <div class="brand">
+            <span class="brand-mark">⚙</span>
+            <div>
+                <h1>Detection &amp; Sizing</h1>
+                <p class="subtitle">These thresholds shape which spreads qualify and how positions are sized. Changes apply on the next scan.</p>
+            </div>
+        </div>
+        <div class="status"><a class="link" href="/">← Opportunities</a></div>
+    </header>
 
-<button @onclick="Save">Save</button>
-@if (saved) { <span>Saved ✓</span> }
+    <div class="settings-form">
+        <div class="field">
+            <span class="tt"><label class="tt-trigger u">Max unit price (gp)</label><span class="tt-pop">Skip items costing more than this per unit. Caps capital exposure and keeps you out of the volatile high-value tier.</span></span>
+            <input type="number" @bind="maxUnitPrice" />
+        </div>
+        <div class="field">
+            <span class="tt"><label class="tt-trigger u">Min cycle profit (gp)</label><span class="tt-pop">Reject picks that can't earn at least this much per 4-hour buy-limit window. Filters out spreads too small to be worth a slot.</span></span>
+            <input type="number" @bind="minCycleProfit" />
+        </div>
+        <div class="field">
+            <span class="tt"><label class="tt-trigger u">Min margin %</label><span class="tt-pop">Require at least this net margin (after the 2% GE tax) relative to buy price.</span></span>
+            <input type="number" step="0.1" @bind="minMarginPercent" />
+        </div>
+        <div class="field">
+            <span class="tt"><label class="tt-trigger u">Min safety score</label><span class="tt-pop">Only show picks whose modeled clean-fill probability is at least this (0–100). Higher = more conservative.</span></span>
+            <input type="number" @bind="minSafety" />
+        </div>
+        <div class="field">
+            <span class="tt"><label class="tt-trigger u">Bankroll (gp)</label><span class="tt-pop">Total capital. Each pick is sized to roughly bankroll ÷ 8 (one per GE slot), then capped by the buy limit.</span></span>
+            <input type="number" @bind="bankroll" />
+        </div>
+
+        <button class="btn" @onclick="Save">Save</button>
+        @if (saved) { <span class="saved">Saved ✓</span> }
+    </div>
+</div>
 
 @code {
     private long maxUnitPrice, minCycleProfit, minSafety, bankroll;
