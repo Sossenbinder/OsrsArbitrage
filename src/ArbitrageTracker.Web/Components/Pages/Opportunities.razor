@@ -134,7 +134,13 @@
                         <img class="icon" src="https://static.runelite.net/cache/item/icon/@(o.ItemId).png"
                              alt="" loading="lazy" onerror="this.style.visibility='hidden'" />
                         <span class="item-text">
-                            <span class="item-name">@o.Name</span>
+                            <span class="item-head">
+                                <span class="item-name">@o.Name</span>
+                                <a class="src-link tt" href="https://prices.runescape.wiki/osrs/item/@o.ItemId" target="_blank" rel="noopener noreferrer">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7"/><path d="M21 3l-9 9"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+                                    <span class="tt-pop">Open <b>@o.Name</b> on prices.runescape.wiki — the live price source (history graph &amp; volumes). Opens in a new tab.</span>
+                                </a>
+                            </span>
                             <span class="tt"><span class="tt-trigger item-sub">limit @o.BuyLimit.ToString("N0") / 4h</span><span class="tt-pop">You can buy at most @o.BuyLimit.ToString("N0") of this item every 4 hours, per account. This caps how much one flip can earn.</span></span>
                         </span>
                     </span>
