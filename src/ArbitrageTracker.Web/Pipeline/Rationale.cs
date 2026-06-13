@@ -28,11 +28,13 @@ public static class Rationale
 
     public static IReadOnlyList<SafetyFactor> Factors(SafetyBreakdown b) => new[]
     {
-        new SafetyFactor("Two-sided liquidity", b.Liquidity, 40, Status(b.Liquidity),
-            "Both sides are actively traded, so you can enter and exit. Computed from the geometric mean of recent buy and sell volume — if one side is dead, this collapses to zero."),
-        new SafetyFactor("Price stability", b.Volatility, 25, Status(b.Volatility),
+        new SafetyFactor("Two-sided liquidity", b.Liquidity, 25, Status(b.Liquidity),
+            "Both sides are actively traded right now, so you can enter and exit. Computed from the geometric mean of recent buy and sell volume — if one side is dead, this collapses to zero."),
+        new SafetyFactor("Market depth", b.DemandDepth, 25, Status(b.DemandDepth),
+            "How deep and continuous this item's market is — 'traditional' safety. Staples like runes, ammo and food trade in size every window and score high; niche items (PvP/wilderness/blighted consumables) trade sporadically and score low, even if one moment looks fine."),
+        new SafetyFactor("Price stability", b.Volatility, 20, Status(b.Volatility),
             "The price has held steady over the last few hours, so the spread is unlikely to swing against you while you wait for both legs to fill."),
-        new SafetyFactor("Spread persistence", b.Persistence, 20, Status(b.Persistence),
+        new SafetyFactor("Spread persistence", b.Persistence, 15, Status(b.Persistence),
             "The profitable gap has shown up repeatedly across recent 5-minute windows — evidence it's a real, repeatable spread and not a one-off print."),
         new SafetyFactor("Price freshness", b.Freshness, 15, Status(b.Freshness),
             "Both the buy and sell quotes traded very recently, so what you see is live rather than a stale price that may no longer fill."),

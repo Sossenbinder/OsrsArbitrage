@@ -1,3 +1,4 @@
+using ArbitrageTracker.Core.Domain;
 using ArbitrageTracker.Core.Scoring;
 using Xunit;
 
@@ -5,6 +6,37 @@ namespace ArbitrageTracker.Core.Tests;
 
 public class SafetyComponentsTests
 {
+    // MarketBucket(ItemId, Timestamp, AvgHighPrice, AvgLowPrice, HighPriceVolume, LowPriceVolume)
+    private static MarketBucket Bk(long lowVol, long highVol) => new(1, 0, 100, 99, highVol, lowVol);
+
+    [Fact]
+    public void DemandDepth_isZeroForEmpty()
+        => Assert.Equal(0.0, SafetyComponents.DemandDepth(Array.Empty<MarketBucket>()), precision: 6);
+
+    [Fact]
+    public void DemandDepth_isHighForDeepContinuousStaple()
+    {
+        var buckets = Enumerable.Range(0, 24).Select(_ => Bk(2000, 2000)).ToList();
+        Assert.True(SafetyComponents.DemandDepth(buckets) > 0.9);
+    }
+
+    [Fact]
+    public void DemandDepth_isLowForSporadicThinNicheItem()
+    {
+        // Mostly silent windows with tiny volume when it does trade.
+        var buckets = new List<MarketBucket> { Bk(5, 5), Bk(5, 5) };
+        for (int i = 0; i < 22; i++) buckets.Add(Bk(0, 0));
+        Assert.True(SafetyComponents.DemandDepth(buckets) < 0.25);
+    }
+
+    [Fact]
+    public void DemandDepth_penalizesOneSidedTrading()
+    {
+        // Volume only on the buy side every window → two-sided depth stays low.
+        var buckets = Enumerable.Range(0, 24).Select(_ => Bk(2000, 0)).ToList();
+        Assert.True(SafetyComponents.DemandDepth(buckets) < 0.25);
+    }
+
     [Fact]
     public void Liquidity_isZeroWhenEitherSideIsZero()
     {

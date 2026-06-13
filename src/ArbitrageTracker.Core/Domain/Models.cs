@@ -61,6 +61,7 @@ public sealed record Opportunity(
 /// <summary>Per-component contributions to the safety score (each 0..1).</summary>
 public sealed record SafetyBreakdown(
     double Liquidity,
+    double DemandDepth,
     double Volatility,
     double Persistence,
     double Freshness);

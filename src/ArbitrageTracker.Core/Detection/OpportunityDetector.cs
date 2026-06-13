@@ -53,8 +53,9 @@ public sealed class OpportunityDetector(TimeProvider timeProvider)
         if (cycleProfit < settings.MinCycleProfit) return null;
         var avgPrices = ExtractAvgPrices(snap.Buckets5m);
         int profitable = CountProfitableBuckets(snap.Buckets5m, exempt);
+        double demandDepth = SafetyComponents.DemandDepth(snap.Buckets5m);
         var (safety, breakdown) = SafetyScorer.Score(
-            lowVol, highVol, avgPrices, profitable, snap.Buckets5m.Count, age);
+            lowVol, highVol, demandDepth, avgPrices, profitable, snap.Buckets5m.Count, age);
 
         if (safety < settings.MinSafetyScore) return null;
 
