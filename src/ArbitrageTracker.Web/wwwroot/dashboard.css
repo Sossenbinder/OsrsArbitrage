@@ -103,7 +103,7 @@ body {
 }
 .opp-head, .opp-row {
   display: grid;
-  grid-template-columns: 34px minmax(190px, 2.2fr) 1.5fr 1.1fr 1.35fr 1.35fr 210px 70px;
+  grid-template-columns: 30px minmax(168px, 2fr) 1.4fr 1fr 1.25fr 1.2fr 0.8fr 184px 58px;
   align-items: center; gap: 10px; padding: 0 16px;
 }
 .opp-head {
@@ -283,3 +283,33 @@ body {
 .empty-none { justify-content: flex-start; text-align: left; border-style: solid; }
 .empty-none strong { color: var(--text); font-size: 15px; }
 .empty-none p { margin: 6px 0 0; max-width: 620px; }
+
+/* ---- filter / sort bar ---- */
+.filterbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px;
+  padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.fb-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-dim); font-weight: 600; }
+.fb-sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 4px; }
+.seg-btns { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg-btns button { background: var(--surface-2); color: var(--muted); border: none; padding: 6px 12px;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; border-right: 1px solid var(--border); }
+.seg-btns button:last-child { border-right: none; }
+.seg-btns button:hover { background: var(--surface-3); color: var(--text); }
+.seg-btns button.on { background: var(--blue); color: #04223f; }
+.fb-field { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.fb-field input { width: 74px; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: 7px; padding: 5px 8px; font-variant-numeric: tabular-nums; }
+.fb-field input:focus { outline: none; border-color: var(--blue); }
+.fb-clear { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 7px;
+  padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.fb-clear:hover { color: var(--red); border-color: var(--red); }
+.fb-clear.inline { padding: 2px 8px; margin-left: 4px; }
+
+/* sortable column headers */
+.th-sort { cursor: pointer; user-select: none; }
+.th-sort:hover .tt-trigger { color: var(--text); }
+.th-sort.sorted .tt-trigger { color: var(--blue); border-bottom-color: var(--blue); }
+
+/* volume cell */
+.cell-vol { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+.vol-num { font-weight: 600; }
+.vol-sub { font-size: 11px; color: var(--muted-dim); }
