@@ -1,0 +1,13 @@
+<Project>
+
+  <!--
+    Workaround for NETSDK1226 on SDK 10.0.108 with the ASP.NET Core 10.0.8 runtime:
+    the package-pruning data for Microsoft.AspNetCore.App is not present for this SDK
+    patch, which fails restore. This only disables a restore-size optimization.
+    Safe to remove once the SDK ships matching prune data.
+  -->
+  <PropertyGroup>
+    <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+  </PropertyGroup>
+
+</Project>

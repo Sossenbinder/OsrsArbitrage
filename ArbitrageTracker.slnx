@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ArbitrageTracker.Core/ArbitrageTracker.Core.csproj" />
+    <Project Path="src/ArbitrageTracker.Data/ArbitrageTracker.Data.csproj" />
+    <Project Path="src/ArbitrageTracker.Ingestion/ArbitrageTracker.Ingestion.csproj" />
+    <Project Path="src/ArbitrageTracker.Web/ArbitrageTracker.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ArbitrageTracker.Core.Tests/ArbitrageTracker.Core.Tests.csproj" />
+  </Folder>
+</Solution>
