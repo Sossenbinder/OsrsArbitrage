@@ -8,7 +8,8 @@ public class PositionSizerTests
 {
     private static Opportunity Opp(int id, long buy, long netMargin, int buyLimit) =>
         new(id, $"Item{id}", buy, buy + netMargin, 0, netMargin, 1.0, buyLimit,
-            buyLimit * netMargin, 50.0, new SafetyBreakdown(1, 1, 1, 1), 0, 1.0);
+            buyLimit * netMargin, 50.0, new SafetyBreakdown(1, 1, 1, 1), 0, 1.0,
+            BuyVolume5m: 100, SellVolume5m: 100);
 
     [Fact]
     public void Size_limitedByPerSlotBudget()

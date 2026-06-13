@@ -18,6 +18,7 @@ public sealed class DetectionPipeline(
     MarketState state,
     OpportunityDetector detector,
     PositionSizer sizer,
+    FeedHealth feedHealth,
     SettingsStore settings,
     OpportunityCache cache,
     IHubContext<OpportunitiesHub> hub,
@@ -40,17 +41,25 @@ public sealed class DetectionPipeline(
                     }
 
                 var ranked = opps.OrderByDescending(o => o.RankScore).ToList();
+                long now = clock.GetUtcNow().ToUnixTimeSeconds();
 
-                // Enrich with bankroll-aware sizing for the UI.
+                // Enrich with bankroll-aware sizing + fill realism for the UI.
                 var sizing = settings.Sizing;
                 var views = ranked.Select(o =>
                 {
                     var pos = sizer.Size(o, sizing);
-                    return new OpportunityView(o, pos.SuggestedQuantity, pos.CapitalNeeded, pos.ProjectedProfit);
+                    // Est. hours to fill the suggested quantity at the recent buy-side throughput
+                    // (5m volume × 12 ≈ per-hour). You compete with other buyers, so treat as a
+                    // floor, not a promise.
+                    double perHour = Math.Max(1, o.BuyVolume5m * 12.0);
+                    double fillHours = pos.SuggestedQuantity / perHour;
+                    return new OpportunityView(o, pos.SuggestedQuantity, pos.CapitalNeeded,
+                        pos.ProjectedProfit, fillHours, pos.SuggestedQuantity > 0);
                 }).ToList();
-                cache.Set(views);
 
-                long now = clock.GetUtcNow().ToUnixTimeSeconds();
+                long feedAge = now - feedHealth.LastLatestSuccessUnix;
+                bool healthy = feedHealth.ConsecutiveFailures == 0 && feedAge <= 180;
+                cache.Set(new DashboardSnapshot(now, feedAge, healthy, feedHealth.LastError, views));
                 using (var scope = scopeFactory.CreateScope())
                 {
                     var repo = scope.ServiceProvider.GetRequiredService<SnapshotRepository>();
@@ -64,7 +73,7 @@ public sealed class DetectionPipeline(
                         }, ct);
                 }
 
-                await hub.Clients.All.SendAsync("OpportunitiesUpdated", views, ct);
+                await hub.Clients.All.SendAsync("OpportunitiesUpdated", cache.Current, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

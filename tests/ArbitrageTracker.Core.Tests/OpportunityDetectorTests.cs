@@ -75,6 +75,24 @@ public class OpportunityDetectorTests
     }
 
     [Fact]
+    public void Detect_rejectsThinMarginBelowFloor()
+    {
+        var detector = new OpportunityDetector(Clock());
+        // buy 1000, sell 1030 → tax 20, net 10 = 1.0% margin: below the 2% slippage-cushion floor.
+        // High safety must NOT rescue a razor-thin margin.
+        Assert.Null(detector.Detect(Snapshot(high: 1030, low: 1000), DetectionSettings.Default));
+    }
+
+    [Fact]
+    public void Detect_populatesRecentVolumes()
+    {
+        var detector = new OpportunityDetector(Clock());
+        var opp = detector.Detect(Snapshot(high: 1100, low: 1000, recentBuyVolume: 1234), DetectionSettings.Default);
+        Assert.Equal(1234, opp!.BuyVolume5m);   // last 5m low (buy-side) volume
+        Assert.Equal(500, opp.SellVolume5m);    // bucket HighPriceVolume fixed at 500 in helper
+    }
+
+    [Fact]
     public void Detect_rejectsImplausiblyHighMargin()
     {
         var detector = new OpportunityDetector(Clock());

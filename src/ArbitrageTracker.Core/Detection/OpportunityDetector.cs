@@ -43,11 +43,12 @@ public sealed class OpportunityDetector(TimeProvider timeProvider)
         long highVol = snap.Buckets5m.Count > 0 ? snap.Buckets5m[^1].HighPriceVolume : 0;
         if (lowVol < settings.MinTwoSidedVolume || highVol < settings.MinTwoSidedVolume) return null;
 
-        // Expected per-cycle profit: limited by buy limit and recent buy-side demand.
-        long recentDemand = snap.Buckets5m.Count > 0
-            ? snap.Buckets5m[^1].LowPriceVolume
-            : snap.Mapping.BuyLimit;
-        long fillableUnits = Math.Min(snap.Mapping.BuyLimit, Math.Max(0, recentDemand));
+        // Expected per-cycle profit over a 4-hour buy-limit window. Bounded by BOTH the buy limit
+        // and how much the market actually trades: recent 5m buy-side volume extrapolated to 4h
+        // (× 48). The smaller of the two is the realistic ceiling — buying the full limit is
+        // meaningless if the item only trades a handful per hour.
+        long marketUnitsPer4h = lowVol * 48;
+        long fillableUnits = Math.Min(snap.Mapping.BuyLimit, Math.Max(0, marketUnitsPer4h));
         long cycleProfit = fillableUnits * flip.NetMargin;
         if (cycleProfit < settings.MinCycleProfit) return null;
         var avgPrices = ExtractAvgPrices(snap.Buckets5m);
@@ -72,7 +73,9 @@ public sealed class OpportunityDetector(TimeProvider timeProvider)
             SafetyScore: safety,
             SafetyBreakdown: breakdown,
             PriceAgeSeconds: age,
-            RankScore: rank);
+            RankScore: rank,
+            BuyVolume5m: lowVol,
+            SellVolume5m: highVol);
     }
 
     private static List<long> ExtractAvgPrices(IReadOnlyList<MarketBucket> buckets)

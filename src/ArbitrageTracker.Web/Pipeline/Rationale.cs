@@ -63,6 +63,34 @@ public static class Rationale
     public static string FreshnessClass(long seconds) =>
         seconds <= 300 ? "fresh-good" : seconds <= 900 ? "fresh-ok" : "fresh-weak";
 
+    /// <summary>
+    /// Lowest sell price at which the flip still breaks even. Derived from the actual net margin
+    /// (which already accounts for tax — including the 0% tax on sub-50gp items), not a flat 2%
+    /// assumption, so it's correct on the exact price that decides profit vs loss.
+    /// </summary>
+    public static long BreakEvenSell(long sellPrice, long netMargin) => sellPrice - netMargin;
+
+    /// <summary>How robust the margin is to slippage. Margin IS the cushion before break-even.</summary>
+    public static string MarginTier(double marginPct) =>
+        marginPct >= 5 ? "comfortable"
+        : marginPct >= 3 ? "ok"
+        : marginPct >= 2 ? "thin"
+        : "razor";
+
+    public static string MarginTierClass(double marginPct) =>
+        marginPct >= 5 ? "m-good"
+        : marginPct >= 3 ? "m-ok"
+        : "m-weak";
+
+    /// <summary>Compact fill-time estimate, e.g. ~4m / ~2.3h / 8h+.</summary>
+    public static string FillLabel(double hours) =>
+        hours <= 0 ? "instant"
+        : hours < 1 ? $"~{Math.Max(1, (int)Math.Round(hours * 60))}m"
+        : hours <= 8 ? $"~{hours:0.#}h"
+        : "8h+";
+
+    public static bool FillSlow(double hours) => hours > 8;
+
     /// <summary>Abbreviated coins, e.g. 1.25M / 548.9k / 312.</summary>
     public static string Gp(long v)
     {

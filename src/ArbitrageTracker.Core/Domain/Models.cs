@@ -54,7 +54,9 @@ public sealed record Opportunity(
     double SafetyScore,
     SafetyBreakdown SafetyBreakdown,
     long PriceAgeSeconds,
-    double RankScore);
+    double RankScore,
+    long BuyVolume5m,
+    long SellVolume5m);
 
 /// <summary>Per-component contributions to the safety score (each 0..1).</summary>
 public sealed record SafetyBreakdown(

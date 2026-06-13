@@ -11,6 +11,7 @@ public sealed class LatestPoller(
     IWikiPricesClient client,
     MarketState state,
     PriceUpdateChannel channel,
+    FeedHealth feedHealth,
     IServiceScopeFactory scopeFactory,
     ILogger<LatestPoller> log) : BackgroundService
 {
@@ -36,10 +37,12 @@ public sealed class LatestPoller(
                     await repo.PruneAsync(now - 7 * 24 * 3600, ct);
                 }
 
+                feedHealth.RecordLatestSuccess(now);
                 await channel.Writer.WriteAsync(new PriceUpdate(now, prices.Count), ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                feedHealth.RecordLatestFailure(ex.Message);
                 log.LogError(ex, "Latest poll failed");
             }
             await Task.Delay(TimeSpan.FromSeconds(60), ct);

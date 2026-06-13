@@ -4,7 +4,14 @@ public sealed record DetectionSettings
 {
     public long MaxUnitPrice { get; init; } = 1_000_000;
     public long MinCycleProfit { get; init; } = 50_000;
-    public double MinMarginPercent { get; init; } = 0.0;
+
+    /// <summary>
+    /// Minimum net (after-tax) margin as a % of buy price. This is the trader's *cushion*: the
+    /// net margin is how far the sell price can drift down before the flip breaks even. Below ~2%
+    /// a single tick of slippage or a small adverse move turns the flip into a loss, so we default
+    /// conservatively. A high safety score does NOT make a razor-thin margin safe.
+    /// </summary>
+    public double MinMarginPercent { get; init; } = 2.0;
     public double MinSafetyScore { get; init; } = 50.0;
     public long MaxAgeSeconds { get; init; } = 1800;
 

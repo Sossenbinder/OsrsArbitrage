@@ -4,6 +4,7 @@
 @using ArbitrageTracker.Web.Pipeline
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject SettingsStore Settings
 
 <PageTitle>Arbitrage · OSRS GE</PageTitle>
 
@@ -16,23 +17,42 @@
                 <h1>Grand Exchange Arbitrage</h1>
                 <p class="subtitle">
                     Live spreads from <strong>completed RuneLite trades</strong> via the OSRS Wiki.
-                    Safety is a modeled <span class="tt"><span class="tt-trigger u">clean-fill probability</span><span class="tt-pop">The estimated chance you can buy <em>and</em> sell cleanly within the window. It is a risk estimate, not a guarantee — the displayed spread is never locked in.</span></span>, not a guarantee.
+                    Safety is a modeled <span class="tt"><span class="tt-trigger u">clean-fill probability</span><span class="tt-pop">The estimated chance you can buy <em>and</em> sell cleanly within the window. A risk estimate, not a guarantee — the displayed spread is never locked in.</span></span>, not a promise of profit.
                 </p>
             </div>
         </div>
         <div class="status">
-            <span class="pill @(connectionState == "connected" ? "pill-live" : "pill-down")">
-                <span class="dot"></span>@connectionState.ToUpperInvariant()
+            <span class="pill @(IsLive ? "pill-live" : "pill-down")">
+                <span class="dot"></span>@(IsLive ? "LIVE" : "STALE")
             </span>
-            @if (lastUpdate is not null)
-            {
-                <span class="muted">refreshed @lastUpdate</span>
-            }
+            <span class="muted small">@FeedStatusText</span>
         </div>
     </header>
 
+    @if (!IsLive)
+    {
+        <div class="alert">
+            <strong>⛔ Data is not live right now.</strong>
+            @FeedStatusText — prices on screen may be out of date. <strong>Do not place trades</strong> until this clears.
+            @if (snap?.FeedError is { } err) { <span class="muted small">(@err)</span> }
+        </div>
+    }
+
+    <details class="howto" open="@(!hasSeenHowto)">
+        <summary>How to use this — read before you trade</summary>
+        <ol>
+            <li>This tool <strong>finds price gaps; it does not trade for you.</strong> You place every offer yourself in-game.</li>
+            <li><strong>Set your bankroll</strong> in <a href="/settings">Settings</a> so the suggested quantities match the cash you actually have (currently sized for <strong>@Rationale.Gp(Settings.Sizing.Bankroll)</strong>).</li>
+            <li>For a pick: place a <strong>BUY offer at the Buy price</strong> for the suggested quantity.</li>
+            <li>When it fills, place a <strong>SELL offer at the Sell price</strong>. The GE takes a <strong>2% tax</strong> on the sale — every margin here is already after tax.</li>
+            <li>The <strong>margin is your cushion</strong>: if the sell side won't fill and you must lower your price, that's how far you can drop before you start losing. Thin margins (under ~3%) leave almost no room — don't chase.</li>
+            <li>Respect the <strong>4-hour buy limit</strong> per item, and check the <strong>est. fill time</strong> — a position that won't fill the same day exposes you to the market moving.</li>
+            <li><strong>Start small, and never risk coins you can't afford to lose.</strong> A high safety score means the spread is likely fillable — not that profit is guaranteed.</li>
+        </ol>
+    </details>
+
     @{
-        var top = opportunities.Take(GeSlots).ToList();
+        var top = opportunities.Take(GeSlots).Where(v => v.Affordable).ToList();
         long capital = top.Sum(v => v.CapitalNeeded);
         long projProfit = top.Sum(v => v.ProjectedProfit);
         double avgSafety = top.Count > 0 ? top.Average(v => v.Opp.SafetyScore) : 0;
@@ -40,41 +60,50 @@
 
     <section class="stats">
         <div class="stat">
-            <span class="tt"><span class="tt-trigger stat-k">Actionable picks</span><span class="tt-pop">Opportunities that cleared every filter and fit your @GeSlots GE slots. Lower-ranked extras are listed but greyed.</span></span>
-            <span class="stat-v">@Math.Min(opportunities.Count, GeSlots)<span class="stat-sub">/ @opportunities.Count found</span></span>
+            <span class="tt"><span class="tt-trigger stat-k">Actionable picks</span><span class="tt-pop">Picks that cleared every filter and that you can afford within your @GeSlots GE slots. Lower-ranked extras are listed but greyed.</span></span>
+            <span class="stat-v">@top.Count<span class="stat-sub">/ @opportunities.Count found</span></span>
         </div>
         <div class="stat">
-            <span class="tt"><span class="tt-trigger stat-k">Capital to deploy</span><span class="tt-pop">Total coins to buy the suggested quantities across your top @GeSlots slots, sized to your bankroll.</span></span>
-            <span class="stat-v">@Rationale.Gp(capital)</span>
+            <span class="tt"><span class="tt-trigger stat-k">Capital to deploy</span><span class="tt-pop">Total coins to buy the suggested quantities across your top @GeSlots affordable slots.</span></span>
+            <span class="stat-v">@Rationale.Gp(capital)<span class="stat-sub">of @Rationale.Gp(Settings.Sizing.Bankroll)</span></span>
         </div>
         <div class="stat">
-            <span class="tt"><span class="tt-trigger stat-k">Projected profit</span><span class="tt-pop">Expected profit after the 2% GE tax across the top @GeSlots slots, at the suggested quantities. One fill cycle.</span></span>
+            <span class="tt"><span class="tt-trigger stat-k">Profit if filled</span><span class="tt-pop">Expected profit after the 2% tax across the top @GeSlots slots <em>if both legs fill at the shown prices</em>. Not guaranteed — spreads can close.</span></span>
             <span class="stat-v profit">+@Rationale.Gp(projProfit)</span>
         </div>
         <div class="stat">
-            <span class="tt"><span class="tt-trigger stat-k">Avg safety</span><span class="tt-pop">Mean safety score of your top @GeSlots picks. Higher means the spreads are more likely to fill cleanly.</span></span>
+            <span class="tt"><span class="tt-trigger stat-k">Avg safety</span><span class="tt-pop">Mean clean-fill probability of your top @GeSlots picks. Higher = more likely both legs fill.</span></span>
             <span class="stat-v @Rationale.TierClass(avgSafety)">@avgSafety.ToString("F0")</span>
         </div>
     </section>
 
     <div class="toolbar">
-        <a class="link" href="/settings">⚙ Settings</a>
-        <span class="muted small">Polling /latest every 60s · prices are completed-trade aggregates, ± a little</span>
+        <a class="link" href="/settings">⚙ Settings &amp; bankroll</a>
+        <span class="muted small">@LastUpdatedText · polling /latest every 60s</span>
     </div>
 
     @if (opportunities.Count > GeSlots)
     {
         <div class="banner">
             <strong>@opportunities.Count picks, @GeSlots slots.</strong>
-            The top @GeSlots (highlighted) are what you can actually run at once — they're ranked by projected profit × safety.
+            The top @GeSlots (highlighted) are what you can run at once — ranked by profit-if-filled × safety.
         </div>
     }
 
-    @if (opportunities.Count == 0)
+    @if (opportunities.Count == 0 && lastUpdateLocal is null)
     {
         <div class="empty">
             <span class="spin"></span>
-            Waiting for the first full scan… needs one price poll and one 5-minute volume bucket (≈ up to a minute on a cold start).
+            Warming up… the first scan needs one price poll and one 5-minute volume bucket (≈ up to a minute on a cold start).
+        </div>
+    }
+    else if (opportunities.Count == 0)
+    {
+        <div class="empty empty-none">
+            <div>
+                <strong>No low-risk opportunities right now.</strong>
+                <p class="muted small">This is normal — clean spreads above your 2% cushion on liquid items come and go through the day. Nothing here is safer than waiting. You can loosen the thresholds in <a class="link" href="/settings">Settings</a> (at more risk) or check back shortly.</p>
+            </div>
         </div>
     }
     else
@@ -83,12 +112,12 @@
             <div class="opp-head">
                 <span>#</span>
                 <span class="tt"><span class="tt-trigger">Item</span><span class="tt-pop">Tradeable item. Icon and buy limit from the OSRS Wiki / RuneLite item data.</span></span>
-                <span class="tt"><span class="tt-trigger">Spread</span><span class="tt-pop"><b>Buy</b> = the instant-sell price (you place a buy offer here). <b>Sell</b> = the instant-buy price (you place a sell offer here). The gap is the raw spread before tax.</span></span>
-                <span class="tt"><span class="tt-trigger">Margin</span><span class="tt-pop">Net profit per item after the <b>2% GE sell tax</b> (capped at 5M). We reject anything above 20% — extreme margins are almost always one stale price, not real arbitrage.</span></span>
-                <span class="tt"><span class="tt-trigger">Position</span><span class="tt-pop">Suggested buy quantity for <b>one GE slot</b>, sized to your per-slot budget (bankroll ÷ 8) and capped by the 4-hour buy limit, with the coins required.</span></span>
-                <span class="tt"><span class="tt-trigger">Profit</span><span class="tt-pop"><b>Top</b>: projected profit for this slot (qty × net margin). <b>Below</b>: cycle profit if you fill the entire buy limit this 4-hour window.</span></span>
-                <span class="tt"><span class="tt-trigger">Safety</span><span class="tt-pop">Modeled probability of cleanly buying and selling within the window. Hover any meter to see the four factors behind the score.</span></span>
-                <span class="tt"><span class="tt-trigger">Age</span><span class="tt-pop">Time since the <b>older</b> of the two prices last traded. We require both sides fresh (≤ 30 min) so the spread is real and live.</span></span>
+                <span class="tt"><span class="tt-trigger">Spread</span><span class="tt-pop"><b>Buy</b> = instant-sell price (place a buy offer here). <b>Sell</b> = instant-buy price (place a sell offer here). These are last completed trades, so the live game price may differ.</span></span>
+                <span class="tt"><span class="tt-trigger">Margin / cushion</span><span class="tt-pop">Net profit per item after the <b>2% GE tax</b>. This is also your <b>cushion</b> — how far the sell price can fall before you break even. Under ~3% leaves little slippage room. We reject under 2% and over 20% (stale data).</span></span>
+                <span class="tt"><span class="tt-trigger">Position</span><span class="tt-pop">Suggested buy quantity for <b>one GE slot</b> (bankroll ÷ 8, capped by the 4-hour buy limit), the coins required, and an estimate of how long that quantity takes to fill at recent volume.</span></span>
+                <span class="tt"><span class="tt-trigger">Profit if filled</span><span class="tt-pop"><b>Top</b>: profit for this slot if both legs fill (qty × net margin). <b>Below</b>: 4-hour potential, bounded by the buy limit and how much the item actually trades.</span></span>
+                <span class="tt"><span class="tt-trigger">Safety</span><span class="tt-pop">Modeled probability of cleanly buying and selling within the window. Hover any meter for the four factors behind it.</span></span>
+                <span class="tt"><span class="tt-trigger">Age</span><span class="tt-pop">Time since the <b>older</b> of the two prices last traded. Both sides must be fresh (≤ 30 min). Older = trust less.</span></span>
             </div>
 
             @{ int rank = 0; }
@@ -97,7 +126,8 @@
                 var o = v.Opp;
                 rank++;
                 var factors = Rationale.Factors(o.SafetyBreakdown);
-                <div class="opp-row @(rank <= GeSlots ? "actionable" : "overflow")">
+                var marginCls = Rationale.MarginTierClass(o.MarginPercent);
+                <div class="opp-row @(rank <= GeSlots && v.Affordable ? "actionable" : "overflow")">
                     <span class="rank">@rank</span>
 
                     <span class="cell-item">
@@ -105,7 +135,7 @@
                              alt="" loading="lazy" onerror="this.style.visibility='hidden'" />
                         <span class="item-text">
                             <span class="item-name">@o.Name</span>
-                            <span class="tt"><span class="tt-trigger item-sub">limit @o.BuyLimit.ToString("N0") / 4h</span><span class="tt-pop">You can buy at most @o.BuyLimit.ToString("N0") of this item every 4 hours. This caps how much one flip can earn.</span></span>
+                            <span class="tt"><span class="tt-trigger item-sub">limit @o.BuyLimit.ToString("N0") / 4h</span><span class="tt-pop">You can buy at most @o.BuyLimit.ToString("N0") of this item every 4 hours, per account. This caps how much one flip can earn.</span></span>
                         </span>
                     </span>
 
@@ -115,19 +145,30 @@
                         <span class="sell">@o.SellPrice.ToString("N0")</span>
                     </span>
 
-                    <span class="cell-margin">
-                        <span class="margin-net">+@o.NetMargin.ToString("N0")</span>
-                        <span class="margin-pct">@o.MarginPercent.ToString("F1")%</span>
+                    <span class="cell-margin tt">
+                        <span class="margin-net @marginCls">+@o.NetMargin.ToString("N0")</span>
+                        <span class="margin-pct">@o.MarginPercent.ToString("F1")% @(o.MarginPercent < 3 ? "· thin" : "")</span>
+                        <span class="tt-pop">
+                            <b>+@o.NetMargin.ToString("N0") gp per item</b> after tax — your cushion is @o.MarginPercent.ToString("F1")%.<br/>
+                            Break-even sell price ≈ <b>@Rationale.BreakEvenSell(o.SellPrice, o.NetMargin).ToString("N0")</b>. If the sell side won't fill above that, you lose. @(o.MarginPercent < 3 ? "Thin margin — little room for slippage." : "")
+                        </span>
                     </span>
 
                     <span class="cell-pos">
-                        <span class="pos-qty">@v.SuggestedQuantity.ToString("N0") units</span>
-                        <span class="pos-cap">@Rationale.Gp(v.CapitalNeeded)</span>
+                        @if (v.Affordable)
+                        {
+                            <span class="pos-qty">@v.SuggestedQuantity.ToString("N0") units</span>
+                            <span class="pos-cap">@Rationale.Gp(v.CapitalNeeded) · <span class="tt"><span class="tt-trigger @(Rationale.FillSlow(v.EstFillHours) ? "fill-slow" : "")">fills @Rationale.FillLabel(v.EstFillHours)</span><span class="tt-pop">Rough time to buy @v.SuggestedQuantity.ToString("N0") units at recent volume (you compete with other buyers, so treat it as a floor).@(Rationale.FillSlow(v.EstFillHours) ? " May not complete the same day — the price can move against you while you wait." : "")</span></span></span>
+                        }
+                        else
+                        {
+                            <span class="tt"><span class="tt-trigger pos-na">✕ bankroll too small</span><span class="tt-pop">One unit costs more than your per-slot budget (bankroll ÷ 8). Raise your bankroll or this pick isn't actionable.</span></span>
+                        }
                     </span>
 
                     <span class="cell-profit">
                         <span class="p-proj">+@v.ProjectedProfit.ToString("N0")</span>
-                        <span class="p-cycle">cycle @Rationale.Gp(o.ExpectedCycleProfit)</span>
+                        <span class="p-cycle">4h max @Rationale.Gp(o.ExpectedCycleProfit)</span>
                     </span>
 
                     <span class="cell-safety tt">
@@ -159,7 +200,7 @@
                                     <span class="factor-why">@f.Explanation</span>
                                 </span>
                             }
-                            <span class="card-foot">Score = 0.40·liquidity + 0.25·stability + 0.20·persistence + 0.15·freshness</span>
+                            <span class="card-foot">Measures whether you can fill both legs — not whether the margin survives slippage. Check the cushion too.</span>
                         </span>
                     </span>
 
@@ -170,6 +211,11 @@
             }
         </div>
     }
+
+    <footer class="disclaimer">
+        Prices are completed-trade aggregates from the OSRS Wiki and can lag the live game, especially for thinly-traded items.
+        Margins assume both legs fill at the shown prices after 2% GE tax; real fills may differ. This is an analysis aid, not financial advice — trade at your own risk.
+    </footer>
 </div>
 
 @code {
@@ -177,13 +223,36 @@
 
     private HubConnection? _hub;
     private IJSObjectReference? _notifyModule;
-    private List<OpportunityView> opportunities = new();
+    private DashboardSnapshot? snap;
+    private IReadOnlyList<OpportunityView> opportunities => snap?.Opportunities ?? Array.Empty<OpportunityView>();
     private string connectionState = "connecting";
-    private string? lastUpdate;
+    private DateTimeOffset? lastUpdateLocal;
+    private bool hasSeenHowto;
+
+    private PeriodicTimer? _tick;
+    private CancellationTokenSource? _tickCts;
 
     private const double SafetyThreshold = 70;
     private const long ProfitThreshold = 200_000;
     private HashSet<int> _alreadyAlerted = new();
+
+    // "Live" requires: SignalR up, a recent push, and the server reporting a healthy upstream feed.
+    private bool IsLive =>
+        connectionState == "connected"
+        && lastUpdateLocal is { } t && (DateTimeOffset.Now - t).TotalSeconds <= 150
+        && snap is { FeedHealthy: true };
+
+    private string FeedStatusText =>
+        connectionState != "connected" ? "connection lost — reconnecting…"
+        : lastUpdateLocal is null ? "waiting for first data…"
+        : snap is { FeedHealthy: false } ? $"upstream feed last responded {snap.FeedAgeSeconds}s ago"
+        : (DateTimeOffset.Now - lastUpdateLocal.Value).TotalSeconds > 150 ? "no fresh data received"
+        : "feed healthy";
+
+    private string LastUpdatedText =>
+        lastUpdateLocal is { } t
+            ? $"updated {(int)(DateTimeOffset.Now - t).TotalSeconds}s ago"
+            : "not yet updated";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -191,17 +260,18 @@
 
         _notifyModule = await JS.InvokeAsync<IJSObjectReference>("import", "./notify.js");
         await _notifyModule.InvokeVoidAsync("requestPermission");
+        hasSeenHowto = await _notifyModule.InvokeAsync<bool>("seenHowto");
 
         _hub = new HubConnectionBuilder()
             .WithUrl(Nav.ToAbsoluteUri("/hubs/opportunities"))
             .WithAutomaticReconnect()
             .Build();
 
-        _hub.On<List<OpportunityView>>("OpportunitiesUpdated", async views =>
+        _hub.On<DashboardSnapshot>("OpportunitiesUpdated", async s =>
         {
-            opportunities = views;
-            lastUpdate = DateTimeOffset.Now.ToString("HH:mm:ss");
-            await AlertOnNewHighValue(views);
+            snap = s;
+            lastUpdateLocal = DateTimeOffset.Now;
+            await AlertOnNewHighValue(s.Opportunities);
             await InvokeAsync(StateHasChanged);
         });
 
@@ -210,18 +280,30 @@
 
         await _hub.StartAsync();
         connectionState = "connected";
-        opportunities = await _hub.InvokeAsync<List<OpportunityView>>("GetCurrent");
-        if (opportunities.Count > 0) lastUpdate = DateTimeOffset.Now.ToString("HH:mm:ss");
+        snap = await _hub.InvokeAsync<DashboardSnapshot>("GetCurrent");
+        if (snap.Opportunities.Count > 0) lastUpdateLocal = DateTimeOffset.Now;
         await InvokeAsync(StateHasChanged);
+
+        // Re-render every 5s so "updated Xs ago" and the stale/live state stay honest
+        // even when no push arrives (e.g. the upstream feed dies).
+        _tickCts = new CancellationTokenSource();
+        _tick = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        _ = TickLoop(_tickCts.Token);
     }
 
-    private async Task AlertOnNewHighValue(List<OpportunityView> views)
+    private async Task TickLoop(CancellationToken ct)
+    {
+        try { while (await _tick!.WaitForNextTickAsync(ct)) await InvokeAsync(StateHasChanged); }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task AlertOnNewHighValue(IReadOnlyList<OpportunityView> views)
     {
         if (_notifyModule is null) return;
         foreach (var v in views)
         {
             var o = v.Opp;
-            if (o.SafetyScore >= SafetyThreshold
+            if (v.Affordable && o.SafetyScore >= SafetyThreshold
                 && o.ExpectedCycleProfit >= ProfitThreshold
                 && _alreadyAlerted.Add(o.ItemId))
             {
@@ -235,6 +317,8 @@
 
     public async ValueTask DisposeAsync()
     {
+        _tickCts?.Cancel();
+        _tick?.Dispose();
         if (_hub is not null) await _hub.DisposeAsync();
         if (_notifyModule is not null)
         {

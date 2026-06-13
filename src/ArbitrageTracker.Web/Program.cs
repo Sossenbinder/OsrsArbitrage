@@ -28,6 +28,7 @@ builder.Services.AddSingleton<MarketState>();
 builder.Services.AddSingleton<OpportunityDetector>();
 builder.Services.AddSingleton<PositionSizer>();
 builder.Services.AddSingleton<PriceUpdateChannel>();
+builder.Services.AddSingleton<FeedHealth>();
 builder.Services.AddSingleton<OpportunityCache>();
 builder.Services.AddSingleton<SettingsStore>();
 
