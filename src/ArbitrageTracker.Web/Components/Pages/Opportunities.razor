@@ -281,7 +281,7 @@
             if (fMinVolume is long mv) q = q.Where(v => Vol(v) >= mv);
             Func<OpportunityView, double> key = sortKey switch
             {
-                SortKey.Margin => v => v.Opp.MarginPercent,
+                SortKey.Margin => v => v.Opp.NetMargin,
                 SortKey.Safety => v => v.Opp.SafetyScore,
                 SortKey.Volume => v => Vol(v),
                 _ => v => v.Opp.RankScore,
