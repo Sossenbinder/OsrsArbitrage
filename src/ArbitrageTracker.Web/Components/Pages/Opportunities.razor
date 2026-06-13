@@ -55,7 +55,7 @@
     @{
         var ranked = Displayed;
         var shown = ranked.Take(RenderCap).ToList();
-        bool filtered = fMinMargin is not null || fMinSafety is not null || fMinVolume is not null || fMinProfit is not null || fMaxPrice is not null || !string.IsNullOrWhiteSpace(searchText);
+        bool filtered = fMinMargin is not null || fMinSafety is not null || fMinVolume is not null || fMinProfit is not null || fMaxPrice is not null || taxFreeOnly || !string.IsNullOrWhiteSpace(searchText);
         long projProfit = ranked.Sum(o => Size(o).ProjectedProfit);
         double avgSafety = ranked.Count > 0 ? ranked.Average(o => o.SafetyScore) : 0;
         double bestMargin = ranked.Count > 0 ? ranked.Max(o => o.MarginPercent) : 0;
@@ -104,6 +104,7 @@
         </div>
 
         <div class="fb-filters">
+            <label class="fb-check tt"><input type="checkbox" @bind="taxFreeOnly" @bind:after="SavePrefs" /> Tax-free only<span class="tt-pop">Show only flips the GE doesn't tax — items selling under 50 gp (and any exempt items). You keep the full spread, so even tiny per-item margins net 100%.</span></label>
             <label class="fb-num">Margin <span class="op">≥</span> <input type="number" step="0.5" min="0" @bind="fMinMargin" @bind:event="oninput" @bind:after="SavePrefs" /> <span class="unit">%</span></label>
             <label class="fb-num">Safety <span class="op">≥</span> <input type="number" step="5" min="0" max="100" @bind="fMinSafety" @bind:event="oninput" @bind:after="SavePrefs" /></label>
             <label class="fb-num">Volume <span class="op">≥</span> <input type="number" step="50" min="0" @bind="fMinVolume" @bind:event="oninput" @bind:after="SavePrefs" /> <span class="unit">/5m</span></label>
@@ -292,6 +293,7 @@
     private long? fMinVolume;
     private long? fMinProfit;
     private long? fMaxPrice;
+    private bool taxFreeOnly;
     private string? searchText;
     private long bankroll = 10_000_000;
 
@@ -315,6 +317,7 @@
             if (fMinVolume is long mv) q = q.Where(o => Vol(o) >= mv);
             if (fMinProfit is long mp) q = q.Where(o => Size(o).ProjectedProfit >= mp);
             if (fMaxPrice is long mxp) q = q.Where(o => o.BuyPrice <= mxp);
+            if (taxFreeOnly) q = q.Where(o => o.Tax == 0);
             Func<Opportunity, double> key = sortKey switch
             {
                 SortKey.Margin => o => o.NetMargin,
@@ -337,18 +340,20 @@
 
     private async Task ClearFilters()
     {
-        fMinMargin = null; fMinSafety = null; fMinVolume = null; fMinProfit = null; fMaxPrice = null; searchText = null;
+        fMinMargin = null; fMinSafety = null; fMinVolume = null; fMinProfit = null; fMaxPrice = null;
+        taxFreeOnly = false; searchText = null;
         await SavePrefs();
     }
 
     private sealed record Prefs(string? Sort, bool? Desc, double? MinMargin, double? MinSafety,
-        long? MinVolume, long? MinProfit, long? MaxPrice, string? Search, long? Bankroll);
+        long? MinVolume, long? MinProfit, long? MaxPrice, bool? TaxFree, string? Search, long? Bankroll);
 
     private async Task SavePrefs()
     {
         if (_notifyModule is null) return;
         await _notifyModule.InvokeVoidAsync("savePrefs", new Prefs(
-            sortKey.ToString(), sortDesc, fMinMargin, fMinSafety, fMinVolume, fMinProfit, fMaxPrice, searchText, bankroll));
+            sortKey.ToString(), sortDesc, fMinMargin, fMinSafety, fMinVolume, fMinProfit, fMaxPrice,
+            taxFreeOnly, searchText, bankroll));
     }
 
     private HubConnection? _hub;
@@ -403,6 +408,7 @@
             sortDesc = p.Desc ?? sortDesc;
             fMinMargin = p.MinMargin; fMinSafety = p.MinSafety;
             fMinVolume = p.MinVolume; fMinProfit = p.MinProfit; fMaxPrice = p.MaxPrice;
+            taxFreeOnly = p.TaxFree ?? false;
             searchText = p.Search;
             if (p.Bankroll is long b && b > 0) bankroll = b;
         }
