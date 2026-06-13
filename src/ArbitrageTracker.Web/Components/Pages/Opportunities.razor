@@ -101,6 +101,10 @@
                 <button class="@(sortKey==SortKey.Safety?"on":"")" @onclick="() => SetSort(SortKey.Safety)">Safety@(Arrow(SortKey.Safety))</button>
                 <button class="@(sortKey==SortKey.Volume?"on":"")" @onclick="() => SetSort(SortKey.Volume)">Volume@(Arrow(SortKey.Volume))</button>
             </div>
+            @if (!IsDefaultSort)
+            {
+                <button class="fb-clear fb-reset" @onclick="ResetSort" title="Reset to the default order (Best, descending)">↺ Reset order</button>
+            }
         </div>
 
         <div class="fb-filters">
@@ -337,6 +341,15 @@
     }
 
     private string Arrow(SortKey k) => sortKey != k ? "" : (sortDesc ? " ▾" : " ▴");
+
+    private bool IsDefaultSort => sortKey == SortKey.Profit && sortDesc;
+
+    private async Task ResetSort()
+    {
+        sortKey = SortKey.Profit;
+        sortDesc = true;
+        await SavePrefs();
+    }
 
     private async Task ClearFilters()
     {

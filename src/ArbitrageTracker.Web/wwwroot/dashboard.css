@@ -359,3 +359,6 @@ body {
   font-size: 12px; color: var(--muted); }
 .fb-check input { accent-color: var(--green); cursor: pointer; margin: 0; }
 .fb-check:has(input:checked) { border-color: var(--green); color: var(--green); background: rgba(63,185,80,.1); }
+
+/* reset-order button: same shape as clear, neutral (blue) hover instead of red */
+.fb-reset:hover { color: var(--blue); border-color: var(--blue); }
