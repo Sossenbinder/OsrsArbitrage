@@ -30,13 +30,15 @@ After the first Deploy run creates the package, set
 (Private alternative: create a read-only PAT and `docker login ghcr.io` in cloud-init.)
 
 ### 2. Provision the server with Pulumi
-State is kept in a **local file backend** (isolated from any shared S3 backend). `infra/.envrc`
-(gitignored) sets it up via direnv:
-```
-export PULUMI_BACKEND_URL=file://~                 # state in ~/.pulumi/
-export PULUMI_CONFIG_PASSPHRASE=<your-passphrase>  # encrypts secret config (the hcloud token)
-```
-Run `direnv allow` (or `export` the two vars manually), then:
+State uses a **local file backend**, configured in `infra/Pulumi.yaml` (`backend.url: file://~`) —
+no `PULUMI_BACKEND_URL` needed. The only thing kept out of committed config is the **passphrase**
+that encrypts your secret config (the hcloud token); it can't live in `Pulumi.yaml` (it's the
+decryption key). Provide it one of these ways:
+- `infra/.envrc` (gitignored, direnv) sets `PULUMI_CONFIG_PASSPHRASE` — run `direnv allow`; or
+- point `PULUMI_CONFIG_PASSPHRASE_FILE` at a file holding the passphrase; or
+- `export PULUMI_CONFIG_PASSPHRASE=...` for the session.
+
+Then:
 ```bash
 cd infra
 pulumi stack init prod

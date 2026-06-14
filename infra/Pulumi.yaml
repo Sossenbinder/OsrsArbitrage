@@ -1,3 +1,8 @@
 name: osrs-infra
 runtime: dotnet
 description: Hetzner Cloud infrastructure for the OSRS Arbitrage Tracker
+
+# Use a local file backend for this project's state (isolated from any shared S3 backend).
+# This replaces the PULUMI_BACKEND_URL env var — Pulumi reads it here automatically.
+backend:
+  url: file://~
