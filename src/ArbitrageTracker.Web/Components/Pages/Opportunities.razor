@@ -52,14 +52,99 @@
         </ol>
     </details>
 
-    @{
-        var ranked = Displayed;
-        var shown = ranked.Take(RenderCap).ToList();
-        bool filtered = fMinMargin is not null || fMinSafety is not null || fMinVolume is not null || fMinProfit is not null || fMaxPrice is not null || taxFreeOnly || !string.IsNullOrWhiteSpace(searchText);
-        long projProfit = ranked.Sum(o => Size(o).ProjectedProfit);
-        double avgSafety = ranked.Count > 0 ? ranked.Average(o => o.SafetyScore) : 0;
-        double bestMargin = ranked.Count > 0 ? ranked.Max(o => o.MarginPercent) : 0;
+    <div class="mode-toggle">
+        <button class="@(!decantMode ? "on" : "")" @onclick="() => SetMode(false)">Flips</button>
+        <button class="@(decantMode ? "on" : "")" @onclick="() => SetMode(true)">Decants</button>
+    </div>
+
+@if (decantMode)
+{
+    <p class="muted small decant-intro">@decants.Count decant opportunities · buy the cheap low-dose, decant up free at Bob Barter (GE), sell the 4-dose.</p>
+    @if (decants.Count == 0)
+    {
+        <div class="empty empty-none"><div>
+            <strong>No decant opportunities right now.</strong>
+            <p class="muted small">No potion family currently has a low dose dumped cheaply enough to decant up for profit. These spike at off-peak hours — check back.</p>
+        </div></div>
     }
+    else
+    {
+        <div class="opp-grid decant-grid">
+            <div class="opp-head">
+                <span>#</span>
+                <span class="tt"><span class="tt-trigger">Potion</span><span class="tt-pop">Potion family. You'll sell the 4-dose; the icon/link are the 4-dose item.</span></span>
+                <span class="tt"><span class="tt-trigger">Buy (source)</span><span class="tt-pop">The cheapest-per-dose variant to buy and decant up. All doses share one 4-hour buy limit.</span></span>
+                <span class="tt"><span class="tt-trigger">Per dose</span><span class="tt-pop">Source cost per dose vs the 4-dose's after-tax value per dose. The gap is your edge.</span></span>
+                <span class="tt"><span class="tt-trigger">Sell 4-dose</span><span class="tt-pop">4-dose instant-buy price and what you keep after the 2% GE tax.</span></span>
+                <span class="tt"><span class="tt-trigger">Profit / dose</span><span class="tt-pop">After-tax profit per dose once decanted; quantity is sized to your bankroll and the shared limit.</span></span>
+                <span class="tt"><span class="tt-trigger">Profit if filled</span><span class="tt-pop">Per-cycle profit at the suggested quantity (bankroll- and volume-bounded).</span></span>
+                <span class="tt"><span class="tt-trigger">Safety</span><span class="tt-pop">Clean-fill probability: source buy liquidity + 4-dose sell liquidity, stability, freshness.</span></span>
+                <span class="tt"><span class="tt-trigger">Age</span><span class="tt-pop">Older of the source / 4-dose prices. Both must be ≤30 min old.</span></span>
+            </div>
+            @{ int drank = 0; }
+            @foreach (var dop in decants)
+            {
+                drank++;
+                var dfactors = Rationale.Factors(dop.SafetyBreakdown);
+                long dbudget = (long)(bankroll * 0.125);
+                int dqty = dop.SourceBuy > 0 ? (int)Math.Min(dop.BuyLimit, dbudget / dop.SourceBuy) : 0;
+                long dcap = dqty * dop.SourceBuy;
+                long dproj = dqty * dop.ProfitPerSourceUnit;
+                <div class="opp-row" @key="dop.TargetItemId">
+                    <span class="rank">@drank</span>
+                    <span class="cell-item">
+                        <img class="icon" src="https://static.runelite.net/cache/item/icon/@(dop.TargetItemId).png" alt="" loading="lazy" onerror="this.style.visibility='hidden'" />
+                        <span class="item-text">
+                            <span class="item-head">
+                                <span class="item-name">@dop.FamilyName</span>
+                                <a class="src-link" href="https://prices.runescape.wiki/osrs/item/@dop.TargetItemId" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7"/><path d="M21 3l-9 9"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg></a>
+                            </span>
+                            <span class="item-sub">limit @dop.BuyLimit.ToString("N0") / 4h (shared)</span>
+                        </span>
+                    </span>
+                    <span class="cell-spread">
+                        <span class="spread-row"><span class="sell">@dop.SourceDose-dose</span> <span class="buy">@dop.SourceBuy.ToString("N0")</span></span>
+                        <span class="item-sub">@dop.SourceName</span>
+                    </span>
+                    <span class="cell-margin">
+                        <span class="margin-pct">@Rationale.DosePerDose(dop.SourceBuy, dop.SourceDose)</span>
+                        <span class="margin-pct">vs @Rationale.DosePerDose(dop.KeepAfterTax, 4)</span>
+                    </span>
+                    <span class="cell-spread">
+                        <span class="spread-row"><span class="sell">@dop.TargetSell.ToString("N0")</span></span>
+                        <span class="spread-tax taxfree">keep @dop.KeepAfterTax.ToString("N0")</span>
+                    </span>
+                    <span class="cell-margin">
+                        <span class="margin-net">+@dop.PerDoseProfit.ToString("F1")/dose</span>
+                        <span class="margin-pct">@dqty.ToString("N0") @@ @Rationale.Gp(dcap)</span>
+                    </span>
+                    <span class="cell-profit">
+                        <span class="p-proj">+@dproj.ToString("N0")</span>
+                        <span class="p-cycle">4h max @Rationale.Gp(dop.ExpectedCycleProfit)</span>
+                    </span>
+                    <span class="cell-safety tt">
+                        <span class="meter"><span class="meter-bar"><span class="meter-fill @Rationale.TierClass(dop.SafetyScore)" style="width:@dop.SafetyScore.ToString("F0")%"></span></span><span class="meter-num">@dop.SafetyScore.ToString("F0")</span></span>
+                        <span class="seg">@foreach (var f in dfactors){<span class="seg-bit s-@f.Status" style="flex:@f.WeightPct"></span>}</span>
+                        <span class="tt-pop card">
+                            <span class="card-head"><span class="badge @Rationale.TierClass(dop.SafetyScore)">@Rationale.Tier(dop.SafetyScore)</span><span class="card-score">@dop.SafetyScore.ToString("F0")<span class="card-score-max">/100</span></span></span>
+                            @foreach (var f in dfactors){<span class="factor"><span class="factor-top"><span class="factor-label">@f.Label</span><span class="factor-meta">@f.Value.ToString("P0") · @f.WeightPct% weight</span></span><span class="factor-bar"><span class="factor-fill s-@f.Status" style="width:@((f.Value*100).ToString("F0"))%"></span></span><span class="factor-why">@f.Explanation</span></span>}
+                            <span class="card-foot">Decant: buy the cheap low dose, decant up free at Bob Barter, sell the 4-dose.</span>
+                        </span>
+                    </span>
+                    <span class="cell-age"><span class="age-pill @Rationale.FreshnessClass(dop.PriceAgeSeconds)">@Rationale.Age(dop.PriceAgeSeconds)</span></span>
+                </div>
+            }
+        </div>
+    }
+}
+else
+{
+    var ranked = Displayed;
+    var shown = ranked.Take(RenderCap).ToList();
+    bool filtered = fMinMargin is not null || fMinSafety is not null || fMinVolume is not null || fMinProfit is not null || fMaxPrice is not null || taxFreeOnly || !string.IsNullOrWhiteSpace(searchText);
+    long projProfit = ranked.Sum(o => Size(o).ProjectedProfit);
+    double avgSafety = ranked.Count > 0 ? ranked.Average(o => o.SafetyScore) : 0;
+    double bestMargin = ranked.Count > 0 ? ranked.Max(o => o.MarginPercent) : 0;
 
     <section class="stats">
         <div class="stat">
@@ -280,6 +365,8 @@
         </div>
     }
 
+    }
+
     <footer class="disclaimer">
         Prices are completed-trade aggregates from the OSRS Wiki and can lag the live game, especially for thinly-traded items.
         Margins assume both legs fill at the shown prices after 2% GE tax; real fills may differ. This is an analysis aid, not financial advice — trade at your own risk.
@@ -298,6 +385,7 @@
     private long? fMinProfit;
     private long? fMaxPrice;
     private bool taxFreeOnly;
+    private bool decantMode;
     private string? searchText;
     private long bankroll = 10_000_000;
 
@@ -359,20 +447,24 @@
     }
 
     private sealed record Prefs(string? Sort, bool? Desc, double? MinMargin, double? MinSafety,
-        long? MinVolume, long? MinProfit, long? MaxPrice, bool? TaxFree, string? Search, long? Bankroll);
+        long? MinVolume, long? MinProfit, long? MaxPrice, bool? TaxFree, bool? Decant,
+        string? Search, long? Bankroll);
 
     private async Task SavePrefs()
     {
         if (_notifyModule is null) return;
         await _notifyModule.InvokeVoidAsync("savePrefs", new Prefs(
             sortKey.ToString(), sortDesc, fMinMargin, fMinSafety, fMinVolume, fMinProfit, fMaxPrice,
-            taxFreeOnly, searchText, bankroll));
+            taxFreeOnly, decantMode, searchText, bankroll));
     }
+
+    private async Task SetMode(bool decant) { decantMode = decant; await SavePrefs(); }
 
     private HubConnection? _hub;
     private IJSObjectReference? _notifyModule;
     private DashboardSnapshot? snap;
     private IReadOnlyList<Opportunity> opportunities => snap?.Opportunities ?? Array.Empty<Opportunity>();
+    private IReadOnlyList<DecantOpportunity> decants => snap?.Decants ?? Array.Empty<DecantOpportunity>();
     private string connectionState = "connecting";
     private DateTimeOffset? lastUpdateLocal;
     // Start collapsed so returning visitors never see an open→closed flash; we open it only
@@ -422,6 +514,7 @@
             fMinMargin = p.MinMargin; fMinSafety = p.MinSafety;
             fMinVolume = p.MinVolume; fMinProfit = p.MinProfit; fMaxPrice = p.MaxPrice;
             taxFreeOnly = p.TaxFree ?? false;
+            decantMode = p.Decant ?? false;
             searchText = p.Search;
             if (p.Bankroll is long b && b > 0) bankroll = b;
         }

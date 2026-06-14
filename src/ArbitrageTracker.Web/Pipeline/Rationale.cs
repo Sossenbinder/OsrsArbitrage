@@ -93,6 +93,9 @@ public static class Rationale
 
     public static bool FillSlow(double hours) => hours > 8;
 
+    /// <summary>Per-dose price label, e.g. "200/dose".</summary>
+    public static string DosePerDose(long price, int dose) => $"{price / (double)dose:0.#}/dose";
+
     /// <summary>Abbreviated coins, e.g. 1.25M / 548.9k / 312.</summary>
     public static string Gp(long v)
     {
