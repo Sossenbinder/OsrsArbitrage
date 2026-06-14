@@ -1,13 +1,14 @@
 <Project>
 
   <!--
-    Workaround for NETSDK1226 on SDK 10.0.108 with the ASP.NET Core 10.0.8 runtime:
-    the package-pruning data for Microsoft.AspNetCore.App is not present for this SDK
-    patch, which fails restore. This only disables a restore-size optimization.
-    Safe to remove once the SDK ships matching prune data.
+    Disable .NET 10 package pruning. It triggers NETSDK1226 ("prune package data not found")
+    on these SDK patches, and merely allowing missing data (AllowMissingPrunePackageData) causes
+    SDK 10.0.102 to prune the framework's static web assets at publish — dropping
+    _framework/blazor.web.js so Blazor never loads. Turning pruning off keeps those assets and
+    avoids the error. Re-evaluate once the SDK ships matching prune data across patches.
   -->
   <PropertyGroup>
-    <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+    <RestoreEnablePackagePruning>false</RestoreEnablePackagePruning>
   </PropertyGroup>
 
 </Project>

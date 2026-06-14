@@ -4,18 +4,13 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Restore first (layer-cached on csproj changes only)
+# Publish with a single restore. NOTE: do NOT split into `dotnet restore <web.csproj>` +
+# `dotnet publish --no-restore` — a targeted restore drops the framework static web assets
+# (e.g. _framework/blazor.web.js) in a clean build, so Blazor never loads. Let publish restore.
 COPY Directory.Build.props ./
-COPY src/ArbitrageTracker.Core/*.csproj            src/ArbitrageTracker.Core/
-COPY src/ArbitrageTracker.Data/*.csproj            src/ArbitrageTracker.Data/
-COPY src/ArbitrageTracker.Ingestion/*.csproj       src/ArbitrageTracker.Ingestion/
-COPY src/ArbitrageTracker.Web/*.csproj             src/ArbitrageTracker.Web/
-RUN dotnet restore src/ArbitrageTracker.Web/ArbitrageTracker.Web.csproj
-
-# Build + publish
 COPY src/ ./src/
 RUN dotnet publish src/ArbitrageTracker.Web/ArbitrageTracker.Web.csproj \
-    -c Release -o /app --no-restore /p:UseAppHost=false
+    -c Release -o /app /p:UseAppHost=false
 
 # ---- runtime ----
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
