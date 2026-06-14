@@ -16,6 +16,7 @@ public sealed class DetectionPipeline(
     PriceUpdateChannel channel,
     MarketState state,
     OpportunityDetector detector,
+    DecantDetector decantDetector,
     FeedHealth feedHealth,
     OpportunityCache cache,
     IHubContext<OpportunitiesHub> hub,
@@ -23,6 +24,8 @@ public sealed class DetectionPipeline(
     TimeProvider clock,
     ILogger<DetectionPipeline> log) : BackgroundService
 {
+    private IReadOnlyList<FamilyDef>? _families;
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         await foreach (var _ in channel.Reader.ReadAllAsync(ct))
@@ -41,9 +44,23 @@ public sealed class DetectionPipeline(
                 var ranked = opps.OrderByDescending(o => o.RankScore).ToList();
                 long now = clock.GetUtcNow().ToUnixTimeSeconds();
 
+                // Decants: group families from the mapping (cache while the mapping is stable),
+                // hydrate from live state, detect, rank.
+                _families ??= PotionFamilies.Group(state.AllMappings);
+                if (_families.Count == 0) _families = null;   // mapping not loaded yet; retry next cycle
+                var decants = new List<DecantOpportunity>();
+                foreach (var def in _families ?? Array.Empty<FamilyDef>())
+                {
+                    var input = DecantHydrator.Hydrate(def, state);
+                    if (input is null) continue;
+                    var d = decantDetector.Detect(input, DetectionSettings.Default);
+                    if (d is not null) decants.Add(d);
+                }
+                var rankedDecants = decants.OrderByDescending(d => d.RankScore).ToList();
+
                 long feedAge = now - feedHealth.LastLatestSuccessUnix;
                 bool healthy = feedHealth.ConsecutiveFailures == 0 && feedAge <= 180;
-                cache.Set(new DashboardSnapshot(now, feedAge, healthy, feedHealth.LastError, ranked));
+                cache.Set(new DashboardSnapshot(now, feedAge, healthy, feedHealth.LastError, ranked, rankedDecants));
 
                 using (var scope = scopeFactory.CreateScope())
                 {

@@ -21,6 +21,8 @@ public sealed class MarketState
 
     public IReadOnlyCollection<int> KnownItemIds => _mappings.Keys.ToArray();
 
+    public IReadOnlyCollection<ItemMapping> AllMappings => _mappings.Values.ToArray();
+
     public void UpdateLatest(LatestPrice price) => _latest[price.ItemId] = price;
 
     public void AddBucket5m(MarketBucket bucket) => AddBucket(_buckets5m, bucket);

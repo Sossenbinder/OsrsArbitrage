@@ -11,4 +11,5 @@ public sealed record DashboardSnapshot(
     long FeedAgeSeconds,
     bool FeedHealthy,
     string? FeedError,
-    IReadOnlyList<Opportunity> Opportunities);
+    IReadOnlyList<Opportunity> Opportunities,
+    IReadOnlyList<DecantOpportunity> Decants);

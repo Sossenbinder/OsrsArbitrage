@@ -36,6 +36,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 // Core singletons (shared hot state + stateless services)
 builder.Services.AddSingleton<MarketState>();
 builder.Services.AddSingleton<OpportunityDetector>();
+builder.Services.AddSingleton<DecantDetector>();
 builder.Services.AddSingleton<PriceUpdateChannel>();
 builder.Services.AddSingleton<FeedHealth>();
 builder.Services.AddSingleton<OpportunityCache>();
