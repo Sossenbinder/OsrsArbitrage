@@ -1,8 +1,6 @@
-# Site address comes from $DOMAIN (set in .env / compose):
-#   • a real domain (arb.example.com) → Caddy obtains a free Let's Encrypt cert (HTTPS)
-#   • a bare IP                       → Caddy serves plain HTTP (no ACME for IPs)
-#   • unset                           → defaults to :80
-{$DOMAIN} {
+# Hardcoded site address → Caddy obtains a free Let's Encrypt cert automatically (HTTPS),
+# and redirects HTTP→HTTPS. Change this line if the domain ever changes.
+osrs-arbitrage.dotschranz.net {
 	encode zstd gzip
 
 	# Blazor Server + SignalR ride on WebSockets; reverse_proxy upgrades them automatically.

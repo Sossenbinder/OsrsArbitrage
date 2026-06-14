@@ -15,8 +15,6 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on: [app]
-    environment:
-      DOMAIN: ${DOMAIN:-:80}       # a domain ⇒ auto-HTTPS; empty/unset ⇒ falls back to :80 (HTTP), never blank
     ports:
       - "80:80"
       - "443:443"
