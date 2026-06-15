@@ -1,20 +1,35 @@
-name: Deploy
+name: CI / CD
 
-# Build a multi-arch image, push to GHCR, then pull + restart on the server.
+# One pipeline: test everything, then (on main only) build the image and deploy.
+# Deploy is gated on tests passing — build-push needs test, deploy needs build-push.
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
-
-concurrency:
-  group: deploy
-  cancel-in-progress: false
 
 env:
   IMAGE: ghcr.io/sossenbinder/osrsarbitrage
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore -c Release
+      - name: Test
+        run: dotnet test --no-build -c Release --verbosity normal
+
   build-push:
+    # Only build/push a real image off main (or a manual run) — never for PRs.
+    if: github.event_name != 'pull_request'
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -53,6 +68,10 @@ jobs:
   deploy:
     needs: build-push
     runs-on: ubuntu-latest
+    # Serialize deploys so two pushes can't restart the server on top of each other.
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
     steps:
       - name: Pull & restart on server
         uses: appleboy/ssh-action@v1
