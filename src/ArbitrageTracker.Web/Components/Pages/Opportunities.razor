@@ -259,7 +259,7 @@ else
                 var sized = Size(o);
                 bool affordable = sized.SuggestedQuantity > 0;
                 double fillHours = sized.SuggestedQuantity / Math.Max(1, o.BuyVolume5m * 12.0);
-                <div class="opp-row @(affordable ? "" : "overflow")" @key="o.ItemId">
+                <div class="opp-row pin-click @(affordable ? "" : "overflow")" @key="o.ItemId" @onclick="() => PinFlip(o)" title="Click to open a frozen detail view">
                     <span class="rank">@rank</span>
 
                     <span class="cell-item">
@@ -268,7 +268,7 @@ else
                         <span class="item-text">
                             <span class="item-head">
                                 <span class="item-name">@o.Name</span>
-                                <a class="src-link tt" href="https://prices.runescape.wiki/osrs/item/@o.ItemId" target="_blank" rel="noopener noreferrer">
+                                <a class="src-link tt" href="https://prices.runescape.wiki/osrs/item/@o.ItemId" target="_blank" rel="noopener noreferrer" @onclick:stopPropagation="true">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7"/><path d="M21 3l-9 9"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
                                     <span class="tt-pop">Open <b>@o.Name</b> on prices.runescape.wiki — the live price source (history graph &amp; volumes). Opens in a new tab.</span>
                                 </a>
@@ -373,6 +373,113 @@ else
     </footer>
 </div>
 
+@if (_pinnedFlip is { } pf)
+{
+    var pfactors = Rationale.Factors(pf.SafetyBreakdown);
+    var psized = Size(pf);
+    var live = opportunities.FirstOrDefault(x => x.ItemId == pf.ItemId);
+    bool gone = live is null;
+    bool moved = live is not null && (live.BuyPrice != pf.BuyPrice || live.SellPrice != pf.SellPrice);
+    double pfillHours = psized.SuggestedQuantity / Math.Max(1, pf.BuyVolume5m * 12.0);
+
+    <div class="pin-overlay" @ref="_pinRef" tabindex="-1" @onclick="ClosePin" @onkeydown="OnPinKey">
+        <div class="pin-card" @onclick:stopPropagation="true">
+            <button class="pin-close" @onclick="ClosePin" aria-label="Close">✕</button>
+
+            <div class="pin-head">
+                <img class="icon pin-icon" src="https://static.runelite.net/cache/item/icon/@(pf.ItemId).png" alt="" onerror="this.style.visibility='hidden'" />
+                <div class="pin-title">
+                    <div class="pin-name">
+                        @pf.Name
+                        <a class="src-link" href="https://prices.runescape.wiki/osrs/item/@pf.ItemId" target="_blank" rel="noopener noreferrer" title="Open on prices.runescape.wiki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7"/><path d="M21 3l-9 9"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg></a>
+                    </div>
+                    <div class="muted small">limit @pf.BuyLimit.ToString("N0") / 4h · captured @_pinnedAt.ToLocalTime().ToString("HH:mm:ss")</div>
+                </div>
+                <span class="badge @Rationale.TierClass(pf.SafetyScore)">@Rationale.Tier(pf.SafetyScore) · @pf.SafetyScore.ToString("F0")</span>
+            </div>
+
+            @if (gone)
+            {
+                <div class="pin-moved gone">⚠ This pick has dropped off the live board — its spread no longer qualifies (it may have gone stale or unprofitable). Treat these numbers as a past snapshot, not a current trade.</div>
+            }
+            else if (moved)
+            {
+                <div class="pin-moved">⚠ Prices moved since you opened this — live is now <strong>@live!.BuyPrice.ToString("N0") → @live.SellPrice.ToString("N0")</strong>. <button class="pin-refresh" @onclick="RefreshPin">Refresh to latest</button></div>
+            }
+
+            <div class="pin-grid">
+                <div class="pin-stat">
+                    <span class="pin-k">Spread</span>
+                    <span class="pin-v"><span class="buy">@pf.BuyPrice.ToString("N0")</span> → <span class="sell">@pf.SellPrice.ToString("N0")</span></span>
+                    @if (pf.Tax > 0)
+                    {
+                        <span class="muted small">keep @((pf.SellPrice - pf.Tax).ToString("N0")) after 2% tax (−@pf.Tax.ToString("N0"))</span>
+                    }
+                    else
+                    {
+                        <span class="taxfree small">tax-free — keep the full sell</span>
+                    }
+                </div>
+
+                <div class="pin-stat">
+                    <span class="pin-k">Margin / cushion</span>
+                    <span class="pin-v margin-net @Rationale.MarginTierClass(pf.MarginPercent)">+@pf.NetMargin.ToString("N0")</span>
+                    <span class="muted small">@pf.MarginPercent.ToString("F1")% · break-even sell ≈ @Rationale.BreakEvenSell(pf.SellPrice, pf.NetMargin).ToString("N0")</span>
+                </div>
+
+                <div class="pin-stat">
+                    <span class="pin-k">Position · bankroll @Rationale.Gp(bankroll)</span>
+                    @if (psized.SuggestedQuantity > 0)
+                    {
+                        <span class="pin-v">@psized.SuggestedQuantity.ToString("N0") units</span>
+                        <span class="muted small">@Rationale.Gp(psized.CapitalNeeded) · fills @Rationale.FillLabel(pfillHours)</span>
+                    }
+                    else
+                    {
+                        <span class="pin-v pos-na">bankroll too small</span>
+                        <span class="muted small">one unit exceeds ~1/8 of your bankroll</span>
+                    }
+                </div>
+
+                <div class="pin-stat">
+                    <span class="pin-k">Profit if filled</span>
+                    <span class="pin-v p-proj">+@psized.ProjectedProfit.ToString("N0")</span>
+                    <span class="muted small">4h max @Rationale.Gp(pf.ExpectedCycleProfit)</span>
+                </div>
+
+                <div class="pin-stat">
+                    <span class="pin-k">Volume</span>
+                    <span class="pin-v">@Rationale.Gp(Math.Min(pf.BuyVolume5m, pf.SellVolume5m))</span>
+                    <span class="muted small">two-sided units / 5m</span>
+                </div>
+
+                <div class="pin-stat">
+                    <span class="pin-k">Price age</span>
+                    <span class="pin-v"><span class="age-pill @Rationale.FreshnessClass(pf.PriceAgeSeconds)">@Rationale.Age(pf.PriceAgeSeconds)</span></span>
+                    <span class="muted small">older of the two sides</span>
+                </div>
+            </div>
+
+            <div class="pin-safety">
+                <div class="pin-k">Safety factors</div>
+                @foreach (var f in pfactors)
+                {
+                    <span class="factor">
+                        <span class="factor-top">
+                            <span class="factor-label">@f.Label</span>
+                            <span class="factor-meta">@f.Value.ToString("P0") · @f.WeightPct% weight</span>
+                        </span>
+                        <span class="factor-bar"><span class="factor-fill s-@f.Status" style="width:@((f.Value*100).ToString("F0"))%"></span></span>
+                        <span class="factor-why">@f.Explanation</span>
+                    </span>
+                }
+            </div>
+
+            <div class="card-foot">Frozen snapshot — the live board keeps updating behind this window. Safety is fill probability, not a guarantee the margin survives slippage. Close with ✕, Esc, or by clicking outside.</div>
+        </div>
+    </div>
+}
+
 @code {
     private const int RenderCap = 200;
 
@@ -460,6 +567,34 @@ else
 
     private async Task SetMode(bool decant) { decantMode = decant; await SavePrefs(); }
 
+    // ---- pinned (frozen) flip detail ----
+    // Opportunity is an immutable record; holding the clicked instance keeps it frozen even
+    // when the next snapshot replaces `snap`. Pure client state — no server round-trip.
+    private Opportunity? _pinnedFlip;
+    private DateTimeOffset _pinnedAt;
+    private ElementReference _pinRef;
+    private bool _focusPin;
+
+    private void PinFlip(Opportunity o)
+    {
+        _pinnedFlip = o;
+        _pinnedAt = DateTimeOffset.Now;
+        _focusPin = true; // focus the overlay after render so Esc works without a click
+    }
+
+    private void ClosePin() => _pinnedFlip = null;
+
+    private void RefreshPin()
+    {
+        var live = opportunities.FirstOrDefault(x => x.ItemId == _pinnedFlip?.ItemId);
+        if (live is not null) { _pinnedFlip = live; _pinnedAt = DateTimeOffset.Now; }
+    }
+
+    private void OnPinKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") ClosePin();
+    }
+
     private HubConnection? _hub;
     private IJSObjectReference? _notifyModule;
     private DashboardSnapshot? snap;
@@ -498,7 +633,17 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (!firstRender)
+        {
+            if (_focusPin)
+            {
+                _focusPin = false;
+                try { await _pinRef.FocusAsync(); }
+                catch (JSException) { /* element gone or circuit busy */ }
+                catch (InvalidOperationException) { /* ref not set yet */ }
+            }
+            return;
+        }
 
         _notifyModule = await JS.InvokeAsync<IJSObjectReference>("import", "./notify.js");
         await _notifyModule.InvokeVoidAsync("requestPermission");

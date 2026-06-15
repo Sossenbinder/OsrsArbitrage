@@ -371,6 +371,61 @@ body {
 .mode-toggle button.on { background: var(--blue); color: #04223f; }
 .decant-intro { margin: 0 0 14px; }
 
+/* ---- clickable rows + pinned (frozen) detail ---- */
+.opp-row.pin-click { cursor: pointer; }
+
+.pin-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(5,8,12,.62); backdrop-filter: blur(2px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 48px 16px; overflow-y: auto;
+}
+.pin-overlay:focus { outline: none; }
+.pin-card {
+  position: relative; width: 100%; max-width: 560px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 20px 22px; animation: pinfade .14s ease-out;
+}
+@keyframes pinfade { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.pin-close {
+  position: absolute; top: 12px; right: 12px; width: 30px; height: 30px;
+  background: var(--surface-3); border: 1px solid var(--border); color: var(--muted);
+  border-radius: 8px; cursor: pointer; font-size: 14px; line-height: 1;
+}
+.pin-close:hover { color: var(--text); border-color: var(--muted); }
+
+.pin-head { display: flex; align-items: center; gap: 12px; padding-right: 36px; margin-bottom: 16px; }
+.pin-icon { width: 40px; height: 40px; }
+.pin-title { flex: 1; min-width: 0; }
+.pin-name { font-size: 17px; font-weight: 680; display: flex; align-items: center; gap: 7px; }
+.pin-name .src-link svg { width: 14px; height: 14px; }
+.pin-head .badge { flex: none; }
+
+.pin-moved {
+  background: linear-gradient(90deg, rgba(216,166,39,.16), rgba(216,166,39,.04));
+  border: 1px solid rgba(216,166,39,.4); color: #f0cd6b;
+  padding: 9px 12px; border-radius: 9px; margin-bottom: 16px; font-size: 12.5px; line-height: 1.55;
+}
+.pin-moved strong { color: #fff; }
+.pin-moved.gone { background: linear-gradient(90deg, rgba(248,81,73,.16), rgba(248,81,73,.04));
+  border-color: rgba(248,81,73,.4); color: #ffb4ae; }
+.pin-refresh { background: var(--blue); color: #04223f; border: none; border-radius: 7px;
+  padding: 4px 11px; font-weight: 650; font-size: 12px; cursor: pointer; margin-left: 4px; }
+.pin-refresh:hover { filter: brightness(1.1); }
+
+.pin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 18px; margin-bottom: 16px; }
+.pin-stat { display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; min-width: 0; }
+.pin-k { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-dim); font-weight: 600; }
+.pin-v { font-size: 15px; font-weight: 650; }
+.pin-stat .buy { color: var(--muted); font-weight: 600; }
+.pin-stat .sell { color: var(--text); }
+.pin-stat .taxfree { color: var(--green); }
+
+.pin-safety { border-top: 1px solid var(--border); padding-top: 14px; }
+.pin-safety .pin-k { display: block; margin-bottom: 10px; }
+.pin-card .card-foot { margin-top: 12px; }
+
 /* decant grid columns: #, potion, source, per-dose, sell4, profit/dose, profit, safety, age */
 .decant-grid .opp-head, .decant-grid .opp-row {
   grid-template-columns: 30px minmax(150px,1.7fr) 1.2fr 1.1fr 1.2fr 1.3fr 1.1fr 184px 58px;
