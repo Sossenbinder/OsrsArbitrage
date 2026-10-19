@@ -1,7 +1,10 @@
 name: CI / CD
 
-# One pipeline: test everything, then (on main only) build the image and deploy.
-# Deploy is gated on tests passing — build-push needs test, deploy needs build-push.
+# One pipeline: test on PRs and pushes; on main (or manual dispatch) build and
+# push the image to GHCR, gated on tests passing (build-push needs test).
+# Rollout happens in HKube (ArgoCD, pullPolicy Always). Since the chart uses
+# :latest, trigger it with:
+#   kubectl -n apps rollout restart deployment/arbitrage-tracker
 on:
   push:
     branches: [main]
@@ -27,8 +30,9 @@ jobs:
         run: dotnet test --no-build -c Release --verbosity normal
 
   build-push:
-    # Only build/push a real image off main (or a manual run) — never for PRs.
-    if: github.event_name != 'pull_request'
+    # Only build/push off main — never for PRs or manual runs from other branches,
+    # so :latest can't be overwritten.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -52,7 +56,7 @@ jobs:
           images: ${{ env.IMAGE }}
           tags: |
             type=raw,value=latest
-            type=sha,format=long
+            type=sha
 
       - uses: docker/build-push-action@v6
         with:
@@ -64,27 +68,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  deploy:
-    needs: build-push
-    runs-on: ubuntu-latest
-    # Serialize deploys so two pushes can't restart the server on top of each other.
-    concurrency:
-      group: deploy
-      cancel-in-progress: false
-    steps:
-      - name: Pull & restart on server
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}   # set this secret if your key is passphrase-protected
-          script: |
-            set -e
-            cd /opt/app
-            git pull --ff-only
-            cd deploy
-            docker compose pull
-            docker compose up -d
-            docker image prune -f
